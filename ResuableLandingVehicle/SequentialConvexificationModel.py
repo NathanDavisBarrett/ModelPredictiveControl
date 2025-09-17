@@ -1,4 +1,4 @@
-from System import SystemParameters, Array3
+from System import SystemParameters, Array3, System
 
 from typing import Union, Iterable, Dict, Any
 
@@ -59,9 +59,37 @@ class IterationState:
         self.prev_acceleration = prev_acceleration
 
 
+@dataclass(kw_only=True)
+class InitializationState:
+    mass: float
+    position: Array3
+    velocity: Array3
+    acceleration: Array3
+    artificial_acceleration: Array3 = (0.0, 0.0, 0.0)
+    thrust: Array3
+
+    @property
+    def gamma(self) -> float:
+        return np.linalg.norm(self.thrust)
+
+    @property
+    def artificial_acceleration_mag(self) -> float:
+        return np.linalg.norm(self.artificial_acceleration)
+
+    @classmethod
+    def from_system(cls, system: System):
+        return cls(
+            mass=system.m,
+            position=system.x,
+            velocity=system.v,
+            acceleration=[0.0, 0.0, 0.0],
+            thrust=system.T,
+        )
+
+
 @dataclass
 class SequentialConvexification_Initial_Parameters(SystemParameters):
-    w_m: float = 1.0  # Weight for mass in cost function
+    w_m: float = 0.0  # Weight for mass in cost function
     w_a: float = 1_000.0  # Weight for artificial acceleration in cost function
 
 
@@ -102,6 +130,7 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
         prevState: State = None,
         isFinal: bool = False,
         otherParams: Dict[str, Any] = {},
+        initializationState: InitializationState = None,
     ):
         super().__init__()
 
@@ -114,7 +143,7 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
         self.math = params.math
         self.prevState = prevState
 
-        self.variables()
+        self.variables(initializationState=initializationState)
         self.constraints()
         if isFinal:
             self.final_constraints()
@@ -123,44 +152,80 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
     def dt(self):
         return self._dt()
 
-    def variables(self):
-        self.mass = pmo.variable(
-            lb=self.params.m_dry, value=pmo.value(self.prevState.mass)
+    def variables(self, initializationState: InitializationState = None):
+
+        mass_val = (
+            pmo.value(self.prevState.mass)
+            if initializationState is None
+            else initializationState.mass
+        )
+        self.mass = pmo.variable(lb=self.params.m_dry, value=mass_val)
+
+        poss_val = (
+            [pmo.value(self.prevState.position[i]) for i in range(3)]
+            if initializationState is None
+            else initializationState.position
         )
         self.position = pmo.variable_list(
-            [
-                pmo.variable(value=pmo.value(self.prevState.position[i]))
-                for i in range(3)
-            ]
+            [pmo.variable(value=poss_val[i]) for i in range(3)]
         )
 
+        vel_val = (
+            [pmo.value(self.prevState.velocity[i]) for i in range(3)]
+            if initializationState is None
+            else initializationState.velocity
+        )
         self.velocity = pmo.variable_list(
-            [
-                pmo.variable(value=pmo.value(self.prevState.velocity[i]))
-                for i in range(3)
-            ]
+            [pmo.variable(value=vel_val[i]) for i in range(3)]
         )
 
+        accel_val = (
+            [pmo.value(self.prevState.acceleration[i]) for i in range(3)]
+            if initializationState is None
+            else initializationState.acceleration
+        )
         self.acceleration = pmo.variable_list(
-            [pmo.variable(value=0.0) for _ in range(3)]
+            [pmo.variable(value=accel_val[i]) for i in range(3)]
         )
 
+        art_accel_val = (
+            [0.0, 0.0, 0.0]
+            if initializationState is None
+            else initializationState.artificial_acceleration
+        )
         self.artificial_acceleration = pmo.variable_list(
-            [pmo.variable(value=0.0) for _ in range(3)]
+            [pmo.variable(value=art_accel_val[i]) for i in range(3)]
+        )
+
+        art_accel_mag_val = (
+            1e-5
+            if initializationState is None
+            else initializationState.artificial_acceleration_mag
         )
         self.artificial_acceleration_mag = pmo.variable(
-            domain=pmo.NonNegativeReals, value=1.0
+            domain=pmo.NonNegativeReals, value=art_accel_mag_val
         )
 
+        thrust_val = (
+            [pmo.value(self.prevState.thrust[i]) for i in range(3)]
+            if initializationState is None
+            else initializationState.thrust
+        )
         self.thrust = pmo.variable_list(
-            [pmo.variable(value=pmo.value(self.prevState.thrust[i])) for i in range(3)]
+            [pmo.variable(value=thrust_val[i]) for i in range(3)]
+        )
+
+        gamma_val = (
+            pmo.value(self.prevState.gamma)
+            if initializationState is None
+            else initializationState.gamma
         )
         self.gamma = pmo.variable(
             domain=pmo.NonNegativeReals,
-            value=pmo.value(self.prevState.gamma),
+            value=gamma_val,
         )
 
-        df = self.params.ComputeDragForce(self.velocity)
+        df = self.ComputeDragForce()
 
         self.drag_force = pmo.variable_list(
             [pmo.variable(value=pmo.value(df[i])) for i in range(3)]
@@ -343,6 +408,7 @@ class SequentialConvexification_Initial_Step_Model(
         reference_speed: Array3 = None,
         prevState: State = None,
         isFinal: bool = False,
+        initializationState: InitializationState = None,
     ):
 
         super().__init__(
@@ -353,6 +419,7 @@ class SequentialConvexification_Initial_Step_Model(
             otherParams=dict(
                 reference_mass=reference_mass, reference_speed=reference_speed
             ),
+            initializationState=initializationState,
         )
 
     def mass_evolution_function(self, dt, gamma, prev_gamma):
@@ -373,7 +440,9 @@ class SequentialConvexification_Initial_Step_Model(
         return (
             self.reference_mass
             * (self.acceleration[i] + self.artificial_acceleration[i])
-            == self.thrust[i] + self.drag_force[i] + self.params.g[i] * self.mass
+            == self.thrust[i]
+            + self.drag_force[i]
+            + self.params.g[i] * self.reference_mass  # self. mass
         )  # NOTE: DEPARTING FROM THE ORIGINAL PAPER HERE. Originally, reference_mass was used instead in both locations. But regular mass can be used here without introducing non-convexity.
 
 
@@ -388,6 +457,20 @@ class SequentialConvexification_Iterate_Step_Model(
         prevIterationState: IterationState = None,
         isFinal: bool = False,
     ):
+
+        initializationState = InitializationState(
+            mass=prevIterationState.mass,
+            position=prevTimeState.position,
+            velocity=prevIterationState.velocity,
+            acceleration=prevIterationState.acceleration,
+            thrust=prevIterationState.thrust,
+            artificial_acceleration=[
+                0.0,
+                0.0,
+                0.0,
+            ],  # TODO: We could provide values here, but hopefully they're small enough to not make a difference
+        )
+
         super().__init__(
             params=params,
             dt=dt,
@@ -396,6 +479,7 @@ class SequentialConvexification_Iterate_Step_Model(
             otherParams=dict(
                 prevTimeState=prevTimeState, prevIterationState=prevIterationState
             ),
+            initializationState=initializationState,
         )
 
     def variables(self):
@@ -555,6 +639,7 @@ class SequentialConvexification_Initial_Model(SequantialConvexification_Base_Mod
         nSteps: int,
         start: float,
         stop: float,
+        T_guess: Iterable[Array3] = None,
     ):
         assert stop is not None, "Stop time must be provided for initial model"
         super().__init__(params, nSteps, start, stop)
@@ -564,13 +649,29 @@ class SequentialConvexification_Initial_Model(SequantialConvexification_Base_Mod
         dsdt = (finalSpeed - initialSpeed) / (stop - start)
         dmdt = (params.m_dry - params.m0) / (stop - start)
 
+        if T_guess is not None:
+            # A guess trajectory is provided, load it into the model as the initial values.
+            system = System(
+                params, reference_mass=params.m0, reference_speed=initialSpeed
+            )
+
         self.steps = pmo.block_list()
         for i in range(nSteps):
             isFinal = i == nSteps - 1
             prevState = self.initState if i == 0 else self.steps[i - 1].getState()
 
-            reference_mass = params.m0 + dmdt * (self.start + i * self.dt)
-            reference_speed = initialSpeed + dsdt * (self.start + i * self.dt)
+            reference_mass = params.m0 + dmdt * (i * self.dt)
+            reference_speed = initialSpeed + dsdt * (i * self.dt)
+
+            if T_guess is not None:
+                system.reference_mass = reference_mass
+                system.reference_speed = reference_speed
+
+                system.step(T_guess[i], self.dt)
+
+                initializationState = InitializationState.from_system(system)
+            else:
+                initializationState = None
 
             step = SequentialConvexification_Initial_Step_Model(
                 params=params,
@@ -579,6 +680,7 @@ class SequentialConvexification_Initial_Model(SequantialConvexification_Base_Mod
                 reference_speed=reference_speed,
                 prevState=prevState,
                 isFinal=isFinal,
+                initializationState=initializationState,
             )
             self.steps.append(step)
 

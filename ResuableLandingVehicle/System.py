@@ -190,9 +190,17 @@ class SystemParameters:
 
 
 class System:
-    def __init__(self, params: SystemParameters):
+    def __init__(
+        self,
+        params: SystemParameters,
+        reference_mass: float = None,
+        reference_speed: float = None,
+    ):
         self.params = params
         self.math = params.math
+
+        self.reference_mass = reference_mass
+        self.reference_speed = reference_speed
 
         self.Reset()
 
@@ -206,10 +214,12 @@ class System:
     def step(self, T: Array3, dt: float):
         T_Mag = self.math.norm(T)
 
-        D = self.params.ComputeDragForce(self.v)
+        D = self.params.ComputeDragForce(self.v, v_mag=self.reference_speed)
+
+        m = self.m if self.reference_mass is None else self.reference_mass
 
         a = self.math.vector_add(
-            self.math.vector_scale((self.math.vector_add(T, D)), 1 / self.m),
+            self.math.vector_scale((self.math.vector_add(T, D)), 1 / m),
             self.params.g,
         )
 

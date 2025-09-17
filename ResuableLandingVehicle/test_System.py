@@ -15,7 +15,9 @@ def test_system_step():
     system.step(T, dt)
 
 
-def perform_simulation(alpha, beta, gamma, m0, numStep=30, dt=1):
+def perform_simulation(
+    alpha, beta, gamma, m0, numStep=30, dt=1, use_linearized_model: bool = False
+):
     """
     Performs a simulation of the system dynamics with a thrust profile defined by
 
@@ -39,7 +41,17 @@ def perform_simulation(alpha, beta, gamma, m0, numStep=30, dt=1):
     params.m0 = m0
     params.T0 = np.array([0, 0, gamma])
     params.math = NumpyMath()
-    system = System(params)
+    if use_linearized_model:
+        start = 0
+        stop = numStep * dt
+        initialSpeed = params.math.norm(params.v0)
+        finalSpeed = params.math.norm(params.vf)
+        dsdt = (finalSpeed - initialSpeed) / (stop - start)
+        dmdt = (params.m_dry - params.m0) / (stop - start)
+
+        system = System(params, reference_mass=params.m0, reference_speed=initialSpeed)
+    else:
+        system = System(params)
 
     xs = np.empty((numStep, 3))
     xs[0, :] = system.x
@@ -50,25 +62,39 @@ def perform_simulation(alpha, beta, gamma, m0, numStep=30, dt=1):
     ms = np.empty(numStep)
     ms[0] = system.m
 
+    Ts = np.empty((numStep, 3))
+    Ts[0, :] = params.T0
+
     z_unit = np.array([0, 0, 1])
     for i in range(1, numStep):
         t = i * dt
         T = z_unit * (alpha * t**2 + beta * t + gamma)
+        Ts[i, :] = T
+
+        if use_linearized_model:
+            system.reference_mass = params.m0 + dmdt * t
+            system.reference_speed = initialSpeed + dsdt * t
 
         system.step(T, dt)
         xs[i, :] = system.x
         vs[i, :] = system.v
         ms[i] = system.m
 
-    return xs, vs, ms
+    return xs, vs, ms, Ts
 
 
-def solve_coefs(coefs):
+def solve_coefs(coefs, use_linearized_model: bool = False):
     m0, beta, gamma = coefs
     alpha = 0
     # print(f"Testing alpha={alpha}, beta={beta}, gamma={gamma}")
-    xs, vs, ms = perform_simulation(
-        alpha=alpha, beta=beta, gamma=gamma, m0=m0, numStep=120, dt=0.25
+    xs, vs, ms, _ = perform_simulation(
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        m0=m0,
+        numStep=120,
+        dt=0.25,
+        use_linearized_model=use_linearized_model,
     )
     final_pos = xs[-1, 2]
     final_vel = vs[-1, 2]
@@ -104,13 +130,25 @@ def test_graphic():
 
     from scipy.optimize import fsolve
 
+    use_linearized_model = True
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        m0, beta, gamma = fsolve(solve_coefs, [beta, gamma, 300_000])
+        m0, beta, gamma = fsolve(
+            solve_coefs, [beta, gamma, 300_000], args=(use_linearized_model,)
+        )
 
-    xs, vs, ms = perform_simulation(
-        alpha=alpha, beta=beta, gamma=gamma, m0=m0, numStep=numStep, dt=dt
+    xs, vs, ms, Ts = perform_simulation(
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        m0=m0,
+        numStep=numStep,
+        dt=dt,
+        use_linearized_model=use_linearized_model,
     )
+    print(Ts.shape)
+    np.save("landing_thrust.npy", Ts)
     print("m0 = ", m0)
 
     ax.plot(xs[:, 0], xs[:, 1], xs[:, 2], "b-")
@@ -139,6 +177,7 @@ def test_graphic():
     ax5.set_xlabel("Time (s)")
     ax5.set_ylabel("Mass (kg)")
     ax5.axhline(SystemParameters().m_dry, color="r", linestyle="--")
+
     plt.show()
 
 

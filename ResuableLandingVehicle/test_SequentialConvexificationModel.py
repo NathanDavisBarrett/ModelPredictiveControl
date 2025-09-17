@@ -6,12 +6,16 @@ from SequentialConvexificationModel import (
 )
 
 import pyomo.kernel as pmo
+import numpy as np
 from PyomoTools.base.Solvers import WrappedSolver
 
 
 def test_Initial_Construction():
+    T_guess = np.load("landing_thrust.npy")
     params = SequentialConvexification_Initial_Parameters()
-    model = SequentialConvexification_Initial_Model(params, nSteps=20, start=0, stop=10)
+    model = SequentialConvexification_Initial_Model(
+        params, nSteps=120, start=0, stop=30, T_guess=T_guess
+    )
     assert model is not None
     return params, model
 
