@@ -25,7 +25,9 @@ class Math(ABC):
 
     @classmethod
     def norm(cls, vec: Array3) -> Number:
-        return cls.sqrt(cls.dot(vec, vec))
+        return cls.sqrt(
+            cls.dot(vec, vec) + 1e-6
+        )  # Add small number to avoid ipopt problems with zero norm
 
     @classmethod
     @abstractmethod

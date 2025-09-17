@@ -27,46 +27,22 @@ class State:
         self.gamma = gamma
 
 
-class IterationState:
-    """
-    This is "Psi" from the paper
-    """
-
+class InitializationState:
     def __init__(
         self,
-        dt: float,
         mass: float,
-        prev_mass: float,
-        gamma: float,
-        prev_gamma: float,
+        position: Array3,
         velocity: Array3,
-        prev_velocity: Array3,
-        thrust: Array3,
-        prev_thrust: Array3,
         acceleration: Array3,
-        prev_acceleration: Array3,
+        artificial_acceleration: Array3,
+        thrust: Array3,
     ):
-        self.dt = dt
         self.mass = mass
-        self.prev_mass = prev_mass
-        self.gamma = gamma
-        self.prev_gamma = prev_gamma
+        self.position = position
         self.velocity = velocity
-        self.prev_velocity = prev_velocity
+        self.acceleration = acceleration
+        self.artificial_acceleration = artificial_acceleration
         self.thrust = thrust
-        self.prev_thrust = prev_thrust
-        self.acceleration = acceleration  # NOTE: Pretty sure this is a typo in the original paper. It's originally marked as artificial_acceleration. I'm assuming they meant acceleration here.
-        self.prev_acceleration = prev_acceleration
-
-
-@dataclass(kw_only=True)
-class InitializationState:
-    mass: float
-    position: Array3
-    velocity: Array3
-    acceleration: Array3
-    artificial_acceleration: Array3 = (0.0, 0.0, 0.0)
-    thrust: Array3
 
     @property
     def gamma(self) -> float:
@@ -83,13 +59,52 @@ class InitializationState:
             position=system.x,
             velocity=system.v,
             acceleration=[0.0, 0.0, 0.0],
+            artificial_acceleration=[0.0, 0.0, 0.0],
             thrust=system.T,
         )
 
 
+class IterationState(InitializationState):
+    def __init__(
+        self,
+        dt: float,
+        mass: float,
+        prev_mass: float,
+        gamma: float,
+        prev_gamma: float,
+        velocity: Array3,
+        prev_velocity: Array3,
+        thrust: Array3,
+        prev_thrust: Array3,
+        acceleration: Array3,
+        prev_acceleration: Array3,
+        position: Array3,
+        artificial_acceleration: Array3,
+    ):
+        super().__init__(
+            mass=mass,
+            position=position,
+            velocity=velocity,
+            acceleration=acceleration,
+            artificial_acceleration=artificial_acceleration,
+            thrust=thrust,
+        )
+        self.dt = dt
+        self.prev_mass = prev_mass
+        self._gamma = gamma
+        self.prev_gamma = prev_gamma
+        self.prev_velocity = prev_velocity
+        self.prev_thrust = prev_thrust
+        self.prev_acceleration = prev_acceleration
+
+        @property
+        def gamma(self) -> float:
+            return self._gamma
+
+
 @dataclass
 class SequentialConvexification_Initial_Parameters(SystemParameters):
-    w_m: float = 0.0  # Weight for mass in cost function
+    w_m: float = 1.0  # Weight for mass in cost function
     w_a: float = 1_000.0  # Weight for artificial acceleration in cost function
 
 
@@ -175,6 +190,8 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
             if initializationState is None
             else initializationState.velocity
         )
+        if np.allclose(vel_val, [0.0, 0.0, 0.0]):
+            vel_val = [1e-5, 1e-5, 1e-5]  # Avoid numerical issues with zero velocity
         self.velocity = pmo.variable_list(
             [pmo.variable(value=vel_val[i]) for i in range(3)]
         )
@@ -394,6 +411,10 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
             prev_thrust=[pmo.value(t) for t in self.prevState.thrust],
             acceleration=[pmo.value(a) for a in self.acceleration],
             prev_acceleration=[pmo.value(a) for a in self.prevState.acceleration],
+            position=[pmo.value(p) for p in self.position],
+            artificial_acceleration=[
+                pmo.value(a) for a in self.artificial_acceleration
+            ],
         )
 
 
@@ -453,23 +474,10 @@ class SequentialConvexification_Iterate_Step_Model(
         self,
         params: SystemParameters,
         dt: Union[float, pmo.variable],
-        prevTimeState: State = None,
-        prevIterationState: IterationState = None,
+        prevTimeState: State,
+        prevIterationState: IterationState,
         isFinal: bool = False,
     ):
-
-        initializationState = InitializationState(
-            mass=prevIterationState.mass,
-            position=prevTimeState.position,
-            velocity=prevIterationState.velocity,
-            acceleration=prevIterationState.acceleration,
-            thrust=prevIterationState.thrust,
-            artificial_acceleration=[
-                0.0,
-                0.0,
-                0.0,
-            ],  # TODO: We could provide values here, but hopefully they're small enough to not make a difference
-        )
 
         super().__init__(
             params=params,
@@ -479,13 +487,20 @@ class SequentialConvexification_Iterate_Step_Model(
             otherParams=dict(
                 prevTimeState=prevTimeState, prevIterationState=prevIterationState
             ),
-            initializationState=initializationState,
+            initializationState=prevIterationState,
         )
 
-    def variables(self):
-        super().variables()
+    def variables(self, initializationState: InitializationState = None):
+        super().variables(initializationState=initializationState)
 
-        self.eta_thrust = pmo.variable(domain=pmo.NonNegativeReals, value=1.0)
+        thrust_change = self.math.vector_add(
+            initializationState.thrust,
+            self.math.vector_scale(self.prevIterationState.prev_thrust, -1),
+        )
+
+        eta_val = self.math.dot(thrust_change, thrust_change)
+
+        self.eta_thrust = pmo.variable(domain=pmo.NonNegativeReals, value=eta_val)
 
     def constraints(self):
         super().constraints()
@@ -630,6 +645,80 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
 
     def getIterationStates(self) -> Iterable[IterationState]:
         return [step.getIterationState() for step in self.steps]
+
+    def Plot(self):
+        # import matplotlib
+
+        # matplotlib.use("TkAgg")
+        import matplotlib.pyplot as plt
+
+        dt = pmo.value(self.dt)
+        times = [self.start + i * dt for i in range(self.nSteps)]
+        positions = np.array(
+            [[pmo.value(step.position[i]) for step in self.steps] for i in range(3)]
+        )
+        velocities = np.array(
+            [[pmo.value(step.velocity[i]) for step in self.steps] for i in range(3)]
+        )
+        accelerations = np.array(
+            [[pmo.value(step.acceleration[i]) for step in self.steps] for i in range(3)]
+        )
+        masses = np.array([pmo.value(step.mass) for step in self.steps])
+
+        fig, ((posAx, velAx), (accAx, massAx), (thrustAx, _)) = plt.subplots(
+            3, 2, figsize=(10, 15)
+        )
+        posAx.plot(times, positions[0, :], label="X")
+        posAx.plot(times, positions[1, :], label="Y")
+        posAx.plot(times, positions[2, :], label="Z")
+        posAx.set_title("Position vs Time")
+        posAx.set_xlabel("Time (s)")
+        posAx.set_ylabel("Position (m)")
+        posAx.legend()
+        posAx.grid()
+
+        velAx.plot(times, velocities[0, :], label="Vx")
+        velAx.plot(times, velocities[1, :], label="Vy")
+        velAx.plot(times, velocities[2, :], label="Vz")
+        velAx.set_title("Velocity vs Time")
+        velAx.set_xlabel("Time (s)")
+        velAx.set_ylabel("Velocity (m/s)")
+        velAx.legend()
+        velAx.grid()
+
+        accAx.plot(times, accelerations[0, :], label="Ax")
+        accAx.plot(times, accelerations[1, :], label="Ay")
+        accAx.plot(times, accelerations[2, :], label="Az")
+        accAx.set_title("Acceleration vs Time")
+        accAx.set_xlabel("Time (s)")
+        accAx.set_ylabel("Acceleration (m/s²)")
+        accAx.legend()
+        accAx.grid()
+
+        massAx.plot(times, masses, label="Mass", color="purple")
+        massAx.axhline(self.params.m_dry, color="red", linestyle="--", label="Dry Mass")
+        massAx.set_title("Mass vs Time")
+        massAx.set_xlabel("Time (s)")
+        massAx.set_ylabel("Mass (kg)")
+        massAx.legend()
+        massAx.grid()
+
+        thrusts = np.array(
+            [[pmo.value(step.thrust[i]) for step in self.steps] for i in range(3)]
+        )
+        thrustAx.plot(times, thrusts[0, :], label="Tx")
+        thrustAx.plot(times, thrusts[1, :], label="Ty")
+        thrustAx.plot(times, thrusts[2, :], label="Tz")
+        thrustAx.set_title("Thrust vs Time")
+        thrustAx.set_xlabel("Time (s)")
+        thrustAx.set_ylabel("Thrust (N)")
+        thrustAx.legend()
+        thrustAx.grid()
+        thrustAx.axhline(self.params.T_min, color="red", linestyle="--")
+        thrustAx.axhline(self.params.T_max, color="red", linestyle="--")
+
+        plt.tight_layout()
+        plt.show()
 
 
 class SequentialConvexification_Initial_Model(SequantialConvexification_Base_Model):
