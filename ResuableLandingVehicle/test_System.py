@@ -1,0 +1,146 @@
+from System import System, SystemParameters, NumpyMath
+
+import numpy as np
+import warnings
+
+
+def test_system_step():
+    params = SystemParameters()
+    params.math = NumpyMath()
+    system = System(params)
+
+    T = params.T0 * 1.1
+    dt = 10
+
+    system.step(T, dt)
+
+
+def perform_simulation(alpha, beta, gamma, m0, numStep=30, dt=1):
+    """
+    Performs a simulation of the system dynamics with a thrust profile defined by
+
+        T(t) = Z_unit * (alpha * t^2 + beta * t + gamma)
+
+    where Z_unit is the upward-facing unit vector.
+
+    Args:
+        alpha: Quadratic coefficient of the thrust profile (N/s^2)
+        beta: Linear coefficient of the thrust profile (N/s)
+        gamma: Constant coefficient of the thrust profile (N)
+        numStep: Number of simulation steps
+        dt: Time step duration (s)
+
+    Returns:
+        xs: Array of positions at each time step (numStep x 3)
+        vs: Array of velocities at each time step (numStep x 3)
+        ms: Array of masses at each time step (numStep)
+    """
+    params = SystemParameters()
+    params.m0 = m0
+    params.T0 = np.array([0, 0, gamma])
+    params.math = NumpyMath()
+    system = System(params)
+
+    xs = np.empty((numStep, 3))
+    xs[0, :] = system.x
+
+    vs = np.empty((numStep, 3))
+    vs[0, :] = system.v
+
+    ms = np.empty(numStep)
+    ms[0] = system.m
+
+    z_unit = np.array([0, 0, 1])
+    for i in range(1, numStep):
+        t = i * dt
+        T = z_unit * (alpha * t**2 + beta * t + gamma)
+
+        system.step(T, dt)
+        xs[i, :] = system.x
+        vs[i, :] = system.v
+        ms[i] = system.m
+
+    return xs, vs, ms
+
+
+def solve_coefs(coefs):
+    m0, beta, gamma = coefs
+    alpha = 0
+    # print(f"Testing alpha={alpha}, beta={beta}, gamma={gamma}")
+    xs, vs, ms = perform_simulation(
+        alpha=alpha, beta=beta, gamma=gamma, m0=m0, numStep=120, dt=0.25
+    )
+    final_pos = xs[-1, 2]
+    final_vel = vs[-1, 2]
+    final_mass = ms[-1]
+
+    result = final_pos, final_vel, final_mass - SystemParameters().m_dry * 1.1
+    # print(f"Final pos: {final_pos}, vel: {final_vel}, mass: {final_mass}")
+    # print("-----")
+    return result
+
+
+def test_graphic():
+    import matplotlib
+
+    matplotlib.use("TkAgg")
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    ax = fig.add_subplot(321, projection="3d")
+    ax.set_xlim([-100, 100])
+    ax.set_ylim([-100, 100])
+    ax.set_zlim([0, 200])
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_zlabel("Z (m)")
+
+    numStep = 120
+    dt = 0.25
+
+    alpha = 0
+    beta = 500_000
+    gamma = 200_000
+
+    from scipy.optimize import fsolve
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        m0, beta, gamma = fsolve(solve_coefs, [beta, gamma, 300_000])
+
+    xs, vs, ms = perform_simulation(
+        alpha=alpha, beta=beta, gamma=gamma, m0=m0, numStep=numStep, dt=dt
+    )
+    print("m0 = ", m0)
+
+    ax.plot(xs[:, 0], xs[:, 1], xs[:, 2], "b-")
+
+    ax2 = fig.add_subplot(322)
+    ts = np.arange(numStep) * dt
+    ax2.plot(ts, xs[:, 2], "b-")
+    ax2.set_xlabel("Time (s)")
+    ax2.set_ylabel("Altitude (m)")
+
+    ax3 = fig.add_subplot(323)
+    ax3.plot(ts, vs[:, 2], "b-")
+    ax3.set_xlabel("Time (s)")
+    ax3.set_ylabel("Vertical Speed (m/s)")
+
+    ax4 = fig.add_subplot(324)
+    Ts = alpha * ts**2 + beta * ts + gamma
+    ax4.plot(ts, Ts, "b-")
+    ax4.axhline(SystemParameters().T_min, color="r", linestyle="--")
+    ax4.axhline(SystemParameters().T_max, color="r", linestyle="--")
+    ax4.set_xlabel("Time (s)")
+    ax4.set_ylabel("Thrust Magnitude (N)")
+
+    ax5 = fig.add_subplot(325)
+    ax5.plot(ts, ms, "b-")
+    ax5.set_xlabel("Time (s)")
+    ax5.set_ylabel("Mass (kg)")
+    ax5.axhline(SystemParameters().m_dry, color="r", linestyle="--")
+    plt.show()
+
+
+if __name__ == "__main__":
+    test_graphic()
