@@ -26,7 +26,7 @@ class Math(ABC):
     @classmethod
     def norm(cls, vec: Array3) -> Number:
         return cls.sqrt(
-            cls.dot(vec, vec) + 1e-6
+            cls.dot(vec, vec)  # + 1e-6
         )  # Add small number to avoid ipopt problems with zero norm
 
     @classmethod
@@ -116,39 +116,41 @@ class NumpyMath(Math):
 
 @dataclass
 class SystemParameters:
-    x0: Array3 = np.array([500, 0, 10_000])  # Initial position (m)
-    v0: Array3 = np.array([0, 0, -500])  # Initial velocity (m/s)
-    m0: float = 34_404
+    x0: Array3 = np.array([0.00, 0.00, 1])  # Initial position (km)
+    v0: Array3 = np.array([-0.00, 0, 0.00])  # Initial velocity (km/s)
+    m0: float = 15  # Mg
     T0: Array3 = np.array(
-        [0, 0, 10000]
-    )  # Thrust vector (N) (in line with rocket's longitudinal axis)
+        [0, 0, 175]
+    )  # Thrust vector (kN) (in line with rocket's longitudinal axis)
 
-    xf: Array3 = np.array([0, 0, 0])  # Final position (m)
-    vf: Array3 = np.array([0, 0, 0])  # Final velocity (m/s)
+    xf: Array3 = np.array([0, 0, 0])  # Final position (km)
+    vf: Array3 = np.array([0, 0, 0])  # Final velocity (km/s)
     nf: Array3 = np.array([0, 0, 1])  # Final surface normal vector
 
     # ASSUMING CONSTANT GRAVITY, AIR PRESSURE, AND AIR DENSITY
-    g: Array3 = np.array([0, 0, -9.81])  # Gravity vector (m/s^2)
-    rho: float = 1.225  # Air density at sea level (kg/m^3)
-    P: float = 101325  # Air pressure at sea level (Pa)
+    g: Array3 = np.array([0, 0, -9.807]) / 1000  # Gravity vector (km/s^2)
+    rho: float = 1.0  # Air density at sea level (kg/m^3)
+    P: float = 100  # Air pressure at sea level (kPa)
 
-    T_min: float = 1_000  # Minimum thrust magnitude (N)
-    T_max: float = 1_277_000  # 934_000  # Maximum thrust magnitude (N)
+    T_min: float = 100  # Minimum thrust magnitude (kN)
+    T_max: float = 250  # Maximum thrust magnitude (kN)
 
-    dTdt_max: float = 100_000.0  # Maximum thrust rate of change (N/s)
-    dTdt_min: float = -100_000.0  # Minimum thrust rate of change (N/s)
+    dTdt_max: float = 100.0  # Maximum thrust rate of change (kN/s)
+    dTdt_min: float = -100.0  # Minimum thrust rate of change (kN/s)
 
-    Cd: float = 0.5  # Drag coefficient
-    Sd: float = 1.0  # Reference area for drag (m^2)
+    Cd: float = 1.0  # Drag coefficient
+    Sd: float = 10.0  # Reference area for drag (m^2)
 
-    A_nozzle: float = 0.1  # Nozzle exit area (m^2)
+    A_nozzle: float = 0.5  # Nozzle exit area (m^2)
 
-    max_glide_slope: float = np.pi / 2 - np.pi / 6  # Maximum glide slope (radians)
-    max_tilt = np.pi / 4  # Maximum tilt angle from vertical (radians)
+    max_glide_slope: float = np.radians(
+        80
+    )  # Maximum glide angle from horizontal (radians)
+    max_tilt = np.radians(15)  # Maximum tilt angle from horizontal (radians)
 
-    m_dry: float = 25_000  # Dry mass (kg)
+    m_dry: float = 10  # Dry mass (Mg)
 
-    I_sp: float = 348.0  # Specific impulse (s)
+    I_sp: float = 300.0  # Specific impulse (s)
 
     e_u = np.array([0, 0, 1])  # The upward-facing unit vector
 
@@ -167,28 +169,38 @@ class SystemParameters:
     def ComputeDragForce(self, v: Array3, v_mag: Number = None) -> Array3:
         if v_mag is None:
             v_mag = self.math.norm(v)
-        factor = -0.5 * self.rho * self.Cd * self.Sd * v_mag
-        return [factor * vi for vi in v]  # Drag force vector (N)
+        factor = (
+            -0.5 * self.rho * self.Cd * self.Sd * v_mag
+        )  # (kg / m3 * _ * m2 * km/s) = 1000(kg / m3 * _ * m2 * m/s) = 1000(kg / s) * (N/(kg * m/s2)) = 1000N/(m/s) = kN/(m/s)
+        return [(factor * vi) for vi in v]  # Drag force vector (kN)
 
     def ComputeDragForceSq(self, v_mag_sq: Number, v_sq: Array3) -> Array3:
-        factor = (0.5 * self.rho * self.Cd * self.Sd) ** 2 * v_mag_sq
+        factor = (
+            0.5 * self.rho * self.Cd * self.Sd
+        ) ** 2 * v_mag_sq  # (kg / m3 * _ * m2 * km/s)^2 = 1000^2(kg / m3 * _ * m2 * m/s)^2 = 1000^2(kg / s)^2 * (N/(kg * m/s2))^2 = (1000N/(m/s))^2 = (kN/(m/s))^2
 
-        return [factor * vi for vi in v_sq]  # Drag force vector (N)
+        return [(factor * vi) for vi in v_sq]  # Drag force vector (kN^2)
 
     def ComputeMassDepletion(self, T_Mag: Number) -> Number:
-        return -self.alpha * T_Mag - self.mdot_bp  # Total mass depletion rate (kg/s)
+        # kN/(Mg/s) * kN - Mg/s = Mg/s
+        return -self.alpha * T_Mag - self.mdot_bp  # Total mass depletion rate (Mg/s)
 
     @property
     def g_mag(self) -> float:
-        return self.math.norm(self.g)
+        return self.math.norm(self.g)  # km/s^2
 
     @property
     def alpha(self) -> float:
-        return 1 / (self.I_sp * self.g_mag)
+        # Wanted: kN/(Mg/s)
+
+        # 1/(s * km/s^2) = s/km = s/km * (kN / (kg * km/s^2)) = kN/(kg/s) * (1000)*(kg/Mg) = 1000 kN/(Mg/s)
+        #
+        return 1 / (self.I_sp * self.g_mag * 1000)
 
     @property
     def mdot_bp(self) -> float:
-        return self.P * self.A_nozzle / (self.I_sp * self.g_mag)
+        # kPa * m^2 / (s * km/s^2) = kPa * (m^2 / (1000 m/s)) = Pa * (m * s) = kg/(m * s^2) * (m * s) = kg/s = (1/1000) Mg/s
+        return self.P * self.A_nozzle / (self.I_sp * self.g_mag * 1000)  # Mg/s
 
 
 class System:
@@ -214,65 +226,69 @@ class System:
         self.T_Mag = self.math.norm(self.T)
 
     def step(self, T: Array3, dt: float):
-        T_Mag = self.math.norm(T)
+        T_Mag = self.math.norm(T)  # kN
 
-        D = self.params.ComputeDragForce(self.v, v_mag=self.reference_speed)
+        D = self.params.ComputeDragForce(self.v, v_mag=self.reference_speed)  # kN
 
-        m = self.m if self.reference_mass is None else self.reference_mass
+        m = self.m if self.reference_mass is None else self.reference_mass  # Mg
 
         a = self.math.vector_add(
-            self.math.vector_scale((self.math.vector_add(T, D)), 1 / m),
+            self.math.vector_scale((self.math.vector_add(T, D)), 1 / (m * 1000)),
             self.params.g,
-        )
+        )  # kN/Mg + km/s^2 = (km/s^2 * kg) / Mg + km/s^2 = km/s^2 (kg/Mg) + km/s^2 = 1000 km/s^2 + km/s^2
 
-        dv = self.math.vector_scale(a, dt)
+        dv = self.math.vector_scale(a, dt)  # km/s^2 * s = km/s
 
         dx = self.math.vector_add(
             self.math.vector_scale(self.v, dt), self.math.vector_scale(a, 0.5 * dt * dt)
-        )
+        )  # km/s * s + km/s^2 * s^2 = km + km = km
 
-        dm = self.params.ComputeMassDepletion(T_Mag=T_Mag) * dt
+        dm = self.params.ComputeMassDepletion(T_Mag=T_Mag) * dt  # Mg/s * s = Mg
 
-        self.x = self.math.vector_add(self.x, dx)
-        self.v = self.math.vector_add(self.v, dv)
-        self.m += dm
+        self.x = self.math.vector_add(self.x, dx)  # km + km = km
+        self.v = self.math.vector_add(self.v, dv)  # km/s + km/s = km/s
+        self.m += dm  # Mg + Mg = Mg
 
         # Now check to see if any technical limits have been violated
         if self.m < self.params.m_dry:
-            warn(f"Mass has dropped below dry mass: {self.m} < {self.params.m_dry}")
+            warn("Mass has dropped below dry mass")  #: {self.m} < {self.params.m_dry}")
 
-        x_rel = self.math.vector_add(self.x, self.math.vector_scale(self.params.xf, -1))
-        x_mag = self.math.norm(x_rel)
+        x_rel = self.math.vector_add(
+            self.x, self.math.vector_scale(self.params.xf, -1)
+        )  # km + km = km
+        x_mag = self.math.norm(x_rel)  # km
 
-        lhs = x_mag * np.cos(self.params.max_glide_slope)
-        rhs = self.math.dot(x_rel, self.params.e_u)
-        if lhs > rhs + 1e-4:
-            warn(f"Glide slope limit violated: {lhs} > {rhs}")
+        lhs = x_mag * np.cos(self.params.max_glide_slope)  # km * _ = km
+        rhs = self.math.dot(x_rel, self.params.e_u)  # km * _ = km
+        if lhs > rhs + 1e-3:  # Add small tolerance to avoid numerical issues
+            warn("Glide slope limit violated")  #: {lhs} > {rhs}")
 
-        if T_Mag > self.params.T_max:
+        if T_Mag > self.params.T_max:  # kN
             warn(
-                f"Thrust magnitude exceeds maximum limit: {T_Mag} > {self.params.T_max}"
+                "Thrust magnitude exceeds maximum limit"  #: {T_Mag} > {self.params.T_max}"
             )
 
-        if T_Mag < self.params.T_min:
-            warn(f"Thrust magnitude below minimum limit: {T_Mag} < {self.params.T_min}")
+        if T_Mag < self.params.T_min:  # kN
+            warn(
+                "Thrust magnitude below minimum limit"
+            )  #: {T_Mag} < {self.params.T_min}")
 
-        lhs = T_Mag * np.cos(self.params.max_tilt)
-        rhs = self.math.dot(T, self.params.e_u)
+        lhs = T_Mag * np.cos(self.params.max_tilt)  # kN * _ = kN
+        rhs = self.math.dot(T, self.params.e_u)  # kN * _ = kN
         if lhs > rhs:
-            warn(f"Tilt angle limit violated: {lhs} > {rhs}")
+            warn("Tilt angle limit violated")  #: {lhs} > {rhs}")
 
-        dT = self.math.vector_add(T, self.math.vector_scale(self.T, -1))
-        dTdt = self.math.norm(dT) / dt
-        if dTdt > self.params.dTdt_max:
+        dT = self.math.vector_add(T, self.math.vector_scale(self.T, -1))  # kN + kN = kN
+        dTdt = self.math.norm(dT) / dt  # kN / s = kN/s
+        if dTdt > self.params.dTdt_max:  # kN/s
             warn(
-                f"Thrust rate of change exceeds maximum limit: {dTdt} > {self.params.dTdt_max}"
+                "Thrust rate of change exceeds maximum limit"  #: {dTdt} > {self.params.dTdt_max}"
             )
 
-        if dTdt < self.params.dTdt_min:
+        if dTdt < self.params.dTdt_min:  # kN/s
             warn(
-                f"Thrust rate of change below minimum limit: {dTdt} < {self.params.dTdt_min}"
+                "Thrust rate of change below minimum limit"  #: {dTdt} < {self.params.dTdt_min}"
             )
 
-        self.T = T
-        self.T_Mag = T_Mag
+        self.T = T  # kN
+        self.T_Mag = T_Mag  # kN

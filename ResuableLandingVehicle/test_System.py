@@ -16,7 +16,7 @@ def test_system_step():
 
 
 def perform_simulation(
-    alpha, beta, gamma, m0, numStep=30, dt=1, use_linearized_model: bool = False
+    alpha, beta, gamma, m0, numStep=30, dt=0.5, use_linearized_model: bool = False
 ):
     """
     Performs a simulation of the system dynamics with a thrust profile defined by
@@ -114,19 +114,20 @@ def test_graphic():
 
     fig = plt.figure()
     ax = fig.add_subplot(321, projection="3d")
-    ax.set_xlim([-100, 100])
-    ax.set_ylim([-100, 100])
-    ax.set_zlim([0, 200])
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
-    ax.set_zlabel("Z (m)")
+    ax.set_xlim([-1, 1])
+    ax.set_ylim([-1, 1])
+    ax.set_zlim([0, 2])
+    ax.set_xlabel("X (km)")
+    ax.set_ylabel("Y (km)")
+    ax.set_zlabel("Z (km)")
 
     numStep = 120
     dt = 0.25
 
     alpha = 0
-    beta = 500_000
-    gamma = 200_000
+    beta = 2  # kN/s
+    gamma = 1  # kN
+    m0 = 15  # Mg
 
     from scipy.optimize import fsolve
 
@@ -135,7 +136,7 @@ def test_graphic():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         m0, beta, gamma = fsolve(
-            solve_coefs, [beta, gamma, 300_000], args=(use_linearized_model,)
+            solve_coefs, [m0, beta, gamma], args=(use_linearized_model,)
         )
 
     xs, vs, ms, Ts = perform_simulation(
@@ -149,7 +150,7 @@ def test_graphic():
     )
     print(Ts.shape)
     np.save("landing_thrust.npy", Ts)
-    print("m0 = ", m0)
+    print("m0 = ", m0, "Mg")
 
     ax.plot(xs[:, 0], xs[:, 1], xs[:, 2], "b-")
 
@@ -157,12 +158,12 @@ def test_graphic():
     ts = np.arange(numStep) * dt
     ax2.plot(ts, xs[:, 2], "b-")
     ax2.set_xlabel("Time (s)")
-    ax2.set_ylabel("Altitude (m)")
+    ax2.set_ylabel("Altitude (km)")
 
     ax3 = fig.add_subplot(323)
     ax3.plot(ts, vs[:, 2], "b-")
     ax3.set_xlabel("Time (s)")
-    ax3.set_ylabel("Vertical Speed (m/s)")
+    ax3.set_ylabel("Vertical Speed (km/s)")
 
     ax4 = fig.add_subplot(324)
     Ts = alpha * ts**2 + beta * ts + gamma
@@ -170,12 +171,12 @@ def test_graphic():
     ax4.axhline(SystemParameters().T_min, color="r", linestyle="--")
     ax4.axhline(SystemParameters().T_max, color="r", linestyle="--")
     ax4.set_xlabel("Time (s)")
-    ax4.set_ylabel("Thrust Magnitude (N)")
+    ax4.set_ylabel("Thrust Magnitude (kN)")
 
     ax5 = fig.add_subplot(325)
     ax5.plot(ts, ms, "b-")
     ax5.set_xlabel("Time (s)")
-    ax5.set_ylabel("Mass (kg)")
+    ax5.set_ylabel("Mass (Mg)")
     ax5.axhline(SystemParameters().m_dry, color="r", linestyle="--")
 
     plt.show()
