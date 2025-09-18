@@ -1,4 +1,6 @@
-from System import System, SystemParameters, NumpyMath
+from ..System import System
+from ..SystemParameters import SystemParameters
+from ...Util.NumpyMath import NumpyMath
 
 import numpy as np
 import warnings
