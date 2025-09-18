@@ -9,7 +9,7 @@ import pyomo.kernel as pmo
 import numpy as np
 from PyomoTools.base.Solvers import WrappedSolver
 
-N_STEPS = 30
+N_STEPS = 50
 
 
 def test_Initial_Construction():
@@ -33,6 +33,9 @@ def test_Initial_Feasible(headless=True):
     assert pmo.value(model.artificial_acceleration_norm) < 1.0
 
     if headless:
+        import matplotlib
+
+        matplotlib.use("TkAgg")
         model.Plot()
 
     return params, model.getIterationStates()
@@ -67,6 +70,9 @@ def test_Iterate_Feasible(headless=True):
     assert pmo.value(model.artificial_acceleration_norm) < 1.0
 
     if headless:
+        import matplotlib
+
+        matplotlib.use("TkAgg")
         model.Plot()
 
     return params, model.getIterationStates()
@@ -99,17 +105,18 @@ def test_n_iterable_run(n_iter=3, headless=True):
             )
 
         solver1 = pmo.SolverFactory("gurobi")
-        results = solver1.solve(model_i, tee=True, options={"NumericFocus": 3})
+        results = solver1.solve(model_i, tee=False, options={"NumericFocus": 3})
         print(f"Iteration {i} solve status: ", results.solver.termination_condition)
 
         if results.solver.termination_condition == pmo.TerminationCondition.error:
-
-            print("Error in solver. Terminating.")
+            print("Error in solver.")
+            print(results)
+            print("Terminating.")
             break
 
         artificial_acc = pmo.value(model_i.artificial_acceleration_norm)
         print(f"Iteration {i} artificial acc norm: ", artificial_acc)
-        print(f"Iteration {i} solved in {results.solver.time} s")
+        # print(f"Iteration {i} solved in {results.solver.time} s")
 
     from PyomoTools.kernel import InfeasibilityReport_Interactive
 
@@ -117,6 +124,9 @@ def test_n_iterable_run(n_iter=3, headless=True):
     # rep.show()
 
     if headless:
+        import matplotlib
+
+        matplotlib.use("TkAgg")
         model_i.Plot()
 
 

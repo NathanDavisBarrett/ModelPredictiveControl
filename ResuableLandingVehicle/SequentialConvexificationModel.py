@@ -105,14 +105,14 @@ class IterationState(InitializationState):
 @dataclass
 class SequentialConvexification_Initial_Parameters(SystemParameters):
     w_m: float = 1.0  # Weight for mass in cost function
-    w_a: float = 100.0  # Weight for artificial acceleration in cost function
+    w_a: float = 5e5  # Weight for artificial acceleration in cost function
 
 
 @dataclass(kw_only=True)
 class SequentialConvexification_Iterate_Parameters(
     SequentialConvexification_Initial_Parameters
 ):
-    w_eta_dt: float = 10.0  # Weight for time step change in cost function
+    w_eta_dt: float = 0.1  # Weight for time step change in cost function
     w_eta_thrust: float = 10.0  # Weight for thrust change in cost function
     previous_iterate_states: Iterable[
         IterationState
@@ -249,9 +249,10 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
         )
 
     def base_mass_evolution_function(self, dt, gamma, prev_gamma):
+        # s * ((Mg/s)/kN * (kN) + Mg/s) = Mg
         return -dt * (
             self.params.alpha / 2 * (gamma + prev_gamma) + self.params.mdot_bp
-        )
+        )  # Mg
 
     @abstractmethod
     def mass_evolution_function(self, dt, gamma, prev_gamma):
@@ -260,6 +261,7 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
         )
 
     def base_position_evolution_function(self, dt, prev_vel_i, accel_i, prev_accel_i):
+        # s * (km/s) + (km/s^2 * s^2) = km
         return dt * prev_vel_i + (accel_i + prev_accel_i / 2) / 3 * dt**2
 
     @abstractmethod
@@ -269,6 +271,7 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
         )
 
     def base_velocity_evolution_function(self, dt, accel_i, prev_accel_i):
+        # s * (km/s^2) = km/s
         return (accel_i + prev_accel_i) / 2 * dt
 
     @abstractmethod
@@ -366,12 +369,12 @@ class SequentialConvexification_Base_Step_Model(pmo.block, ABC):
         # Linear Constraint
         self.trust_ramp_upper_limit = pmo.constraint(
             (self.gamma - self.prevState.gamma) <= self.params.dTdt_max * self.dt
-        )
+        )  # kN = (kN/s) * s
 
         # Linear Constraint
         self.trust_ramp_lower_limit = pmo.constraint(
             (self.gamma - self.prevState.gamma) >= self.params.dTdt_min * self.dt
-        )
+        )  # kN = (kN/s) * s
 
     def final_constraints(self):
         self.final_position = pmo.constraint_list()
@@ -458,13 +461,21 @@ class SequentialConvexification_Initial_Step_Model(
         return self.params.ComputeDragForce(self.velocity, v_mag=self.reference_speed)
 
     def NewtonsSecondLaw(self, i):
+        # Mg * (km/s^2 + km/s^2) = kN + kN + (km/s^2 * Mg)
+        # Mg * (km/s^2) = kN + (km/s^2 * Mg)
+        # (kN / (kg * km/s^2)) * (Mg) * (km/s^2) = kN + (kN / (kg * km/s^2)) * (Mg) * (km/s^2)
+        # kN * (Mg/kg) = kN + kN * (Mg/kg)
+        # 1000 kN = kN + 1000 kN
         return (
             self.reference_mass
+            * 1000
             * (self.acceleration[i] + self.artificial_acceleration[i])
             == self.thrust[i]
             + self.drag_force[i]
-            + self.params.g[i] * self.reference_mass  # self. mass
-        )  # NOTE: DEPARTING FROM THE ORIGINAL PAPER HERE. Originally, reference_mass was used instead in both locations. But regular mass can be used here without introducing non-convexity.
+            + self.params.g[i]
+            * self.reference_mass
+            * 1000  # TODO: Replace 2nd mass term with variable mass
+        )
 
 
 class SequentialConvexification_Iterate_Step_Model(
@@ -514,6 +525,9 @@ class SequentialConvexification_Iterate_Step_Model(
         )
 
     def base_mass_evolution_derivative(self, dt, gamma, prev_gamma):
+        # 0: (Mg/s)/kN * kN - Mg/s = Mg/s
+        # 1: s * (Mg/s)/kN = Mg/kN
+        # 2: s * (Mg/s)/kN = Mg/kN
         return [
             -(
                 self.params.alpha / 2 * (gamma + prev_gamma) + self.params.mdot_bp
@@ -536,13 +550,20 @@ class SequentialConvexification_Iterate_Step_Model(
         )
 
         change = [
-            self.dt - self.prevIterationState.dt,
+            dt - self.prevIterationState.dt,
             self.gamma - self.prevIterationState.gamma,
             prev_gamma - self.prevIterationState.prev_gamma,
         ]
+        # 0: Mg/s * s = Mg
+        # 1: Mg/kN * kN = Mg
+        # 2: Mg/kN * kN = Mg
         return previousValue + self.math.dot(derivative, change)
 
     def base_position_evolution_derivative(self, dt, prev_vel_i, accel_i, prev_accel_i):
+        # 0: (km/s) + (km/s^2 * s) = km/s + km/s = km/s
+        # 1: s = s
+        # 2: s^2 = s^2
+        # 3: s^2 = s^2
         return [
             prev_vel_i + (accel_i + prev_accel_i / 2) * 2 / 3 * dt,  # d(position)/d(dt)
             dt,  # d(position)/d(prev_vel_i)
@@ -564,16 +585,22 @@ class SequentialConvexification_Iterate_Step_Model(
             self.prevIterationState.acceleration[i],
             self.prevIterationState.prev_acceleration[i],
         )
-
         change = [
             dt - self.prevIterationState.dt,
             prev_vel_i - self.prevIterationState.prev_velocity[i],
             accel_i - self.prevIterationState.acceleration[i],
             prev_accel_i - self.prevIterationState.prev_acceleration[i],
         ]
+        # 0: km/s * s = km
+        # 1: s * km/s = km
+        # 2: s^2 * km/s^2 = km
+        # 3: s^2 * km/s^2 = km
         return previousValue + self.math.dot(derivative, change)
 
     def base_velocity_evolution_derivative(self, dt, accel_i, prev_accel_i):
+        # 0: (km/s^2) + (km/s^2) = km/s^2
+        # 1: s = s
+        # 2: s = s
         return [
             (accel_i + prev_accel_i) / 2,  # d(velocity)/d(dt)
             dt / 2,  # d(velocity)/d(accel_i)
@@ -598,17 +625,29 @@ class SequentialConvexification_Iterate_Step_Model(
             accel_i - self.prevIterationState.acceleration[i],
             prev_accel_i - self.prevIterationState.prev_acceleration[i],
         ]
+        # 0: km/s^2 * s = km/s
+        # 1: s * km/s^2 = km/s
+        # 2: s * km/s^2 = km/s
         return previousValue + self.math.dot(derivative, change)
 
     def ComputeDragForce(self) -> Array3:
         prevItMag = np.linalg.norm(self.prevIterationState.velocity)
-        return self.params.ComputeDragForce(self.velocity, prevItMag)
+        return self.params.ComputeDragForce(self.velocity, prevItMag)  # kN
 
     def NewtonsSecondLaw(self, i):
         prevItMass = self.prevIterationState.mass
+        # Mg * (km/s^2 + km/s^2) = kN + kN + (km/s^2 * Mg)
+        # Mg * (km/s^2) = kN + (km/s^2 * Mg)
+        # (kN / (kg * km/s^2)) * (Mg) * (km/s^2) = kN + (kN / (kg * km/s^2)) * (Mg) * (km/s^2)
+        # kN * (Mg/kg) = kN + kN * (Mg/kg)
+        # 1000 kN = kN + 1000 kN
         return (
-            prevItMass * (self.acceleration[i] + self.artificial_acceleration[i])
-            == self.thrust[i] + self.drag_force[i] + self.params.g[i] * prevItMass
+            prevItMass * 1000 * (self.acceleration[i] + self.artificial_acceleration[i])
+            == self.thrust[i]
+            + self.drag_force[i]
+            + self.params.g[i]
+            * prevItMass
+            * 1000  # TODO: Replace 2nd mass term with variable mass
         )
 
 
@@ -680,7 +719,7 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         posAx.plot(times, positions[2, :], label="Z")
         posAx.set_title("Position vs Time")
         posAx.set_xlabel("Time (s)")
-        posAx.set_ylabel("Position (m)")
+        posAx.set_ylabel("Position (km)")
         posAx.legend()
         posAx.grid()
 
@@ -689,7 +728,7 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         velAx.plot(times, velocities[2, :], label="Vz")
         velAx.set_title("Velocity vs Time")
         velAx.set_xlabel("Time (s)")
-        velAx.set_ylabel("Velocity (m/s)")
+        velAx.set_ylabel("Velocity (km/s)")
         velAx.legend()
         velAx.grid()
 
@@ -698,7 +737,7 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         accAx.plot(times, accelerations[2, :], label="Az")
         accAx.set_title("Acceleration vs Time")
         accAx.set_xlabel("Time (s)")
-        accAx.set_ylabel("Acceleration (m/s²)")
+        accAx.set_ylabel("Acceleration (km/s²)")
         accAx.legend()
         accAx.grid()
 
@@ -706,7 +745,7 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         massAx.axhline(self.params.m_dry, color="red", linestyle="--", label="Dry Mass")
         massAx.set_title("Mass vs Time")
         massAx.set_xlabel("Time (s)")
-        massAx.set_ylabel("Mass (kg)")
+        massAx.set_ylabel("Mass (Mg)")
         massAx.legend()
         massAx.grid()
 
@@ -718,7 +757,7 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         thrustAx.plot(times, thrusts[2, :], label="Tz")
         thrustAx.set_title("Thrust vs Time")
         thrustAx.set_xlabel("Time (s)")
-        thrustAx.set_ylabel("Thrust (N)")
+        thrustAx.set_ylabel("Thrust (kN)")
         thrustAx.legend()
         thrustAx.grid()
         thrustAx.axhline(-self.params.T_max, color="red", linestyle="--")
@@ -767,9 +806,9 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         )
         threeDimAx.plot_surface(X, Y, Z, alpha=0.3, color="gray", label="Glide Cone")
         threeDimAx.set_title("3D Trajectory")
-        threeDimAx.set_xlabel("X (m)")
-        threeDimAx.set_ylabel("Y (m)")
-        threeDimAx.set_zlabel("Z (m)")
+        threeDimAx.set_xlabel("X (km)")
+        threeDimAx.set_ylabel("Y (km)")
+        threeDimAx.set_zlabel("Z (km)")
         threeDimAx.legend()
         threeDimAx.grid()
         # threeDimAx.set_box_aspect((xmax - xmin, ymax - ymin, zmax - zmin))

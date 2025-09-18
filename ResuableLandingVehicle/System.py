@@ -116,8 +116,8 @@ class NumpyMath(Math):
 
 @dataclass
 class SystemParameters:
-    x0: Array3 = np.array([0.00, 0.00, 1])  # Initial position (km)
-    v0: Array3 = np.array([-0.00, 0, 0.00])  # Initial velocity (km/s)
+    x0: Array3 = np.array([0.15, 0.25, 2.0])  # Initial position (km)
+    v0: Array3 = np.array([-0.00, 0, -0.1])  # Initial velocity (km/s)
     m0: float = 15  # Mg
     T0: Array3 = np.array(
         [0, 0, 175]
@@ -169,9 +169,11 @@ class SystemParameters:
     def ComputeDragForce(self, v: Array3, v_mag: Number = None) -> Array3:
         if v_mag is None:
             v_mag = self.math.norm(v)
-        factor = (
-            -0.5 * self.rho * self.Cd * self.Sd * v_mag
-        )  # (kg / m3 * _ * m2 * km/s) = 1000(kg / m3 * _ * m2 * m/s) = 1000(kg / s) * (N/(kg * m/s2)) = 1000N/(m/s) = kN/(m/s)
+        # D (N) = -0.5 * rho * Cd * Sd * (v_mag_m_s) * v_m_s
+        # D (kN) = D(N) / 1000
+        # D (kN) = -0.5 * rho * Cd * Sd * (v_mag_km_s * 1000) * (v_km_s * 1000) / 1000
+        # D (kN) = -0.5 * rho * Cd * Sd * v_mag_km_s * v_km_s * 1000
+        factor = -0.5 * self.rho * self.Cd * self.Sd * v_mag * 1000
         return [(factor * vi) for vi in v]  # Drag force vector (kN)
 
     def ComputeDragForceSq(self, v_mag_sq: Number, v_sq: Array3) -> Array3:
@@ -182,7 +184,7 @@ class SystemParameters:
         return [(factor * vi) for vi in v_sq]  # Drag force vector (kN^2)
 
     def ComputeMassDepletion(self, T_Mag: Number) -> Number:
-        # kN/(Mg/s) * kN - Mg/s = Mg/s
+        # (Mg/s)/kN * kN - Mg/s = Mg/s
         return -self.alpha * T_Mag - self.mdot_bp  # Total mass depletion rate (Mg/s)
 
     @property
@@ -191,11 +193,11 @@ class SystemParameters:
 
     @property
     def alpha(self) -> float:
-        # Wanted: kN/(Mg/s)
+        # Wanted: (Mg/s)/kN
 
-        # 1/(s * km/s^2) = s/km = s/km * (kN / (kg * km/s^2)) = kN/(kg/s) * (1000)*(kg/Mg) = 1000 kN/(Mg/s)
+        # 1/(s * km/s^2) = s/km = s/km * ((kg * km/s^2)/kN) = (kg/s)/kN * (1000)*(kg/Mg) = 1000 (Mg/s)/kN
         #
-        return 1 / (self.I_sp * self.g_mag * 1000)
+        return 1 / (self.I_sp * self.g_mag * 1000)  # (Mg/s)/kN
 
     @property
     def mdot_bp(self) -> float:
@@ -235,7 +237,7 @@ class System:
         a = self.math.vector_add(
             self.math.vector_scale((self.math.vector_add(T, D)), 1 / (m * 1000)),
             self.params.g,
-        )  # kN/Mg + km/s^2 = (km/s^2 * kg) / Mg + km/s^2 = km/s^2 (kg/Mg) + km/s^2 = 1000 km/s^2 + km/s^2
+        )  # (kN / Mg) * (1/1000) + km/s^2 = (m/s^2 / 1000) + km/s^2 = km/s^2
 
         dv = self.math.vector_scale(a, dt)  # km/s^2 * s = km/s
 
