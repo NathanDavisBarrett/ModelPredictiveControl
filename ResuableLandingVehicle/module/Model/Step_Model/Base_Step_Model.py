@@ -37,6 +37,7 @@ class Base_Step_Model(pmo.block, ABC):
 
         self.variables(initializationState=initializationState)
         self.constraints()
+        self.isFinal = isFinal
         if isFinal:
             self.final_constraints()
 

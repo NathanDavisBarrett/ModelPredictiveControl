@@ -5,6 +5,7 @@ from ..State import IterationState
 
 from dataclasses import dataclass
 from typing import Iterable
+import inspect
 
 
 @dataclass(kw_only=True)
@@ -26,5 +27,11 @@ class Iterate_Parameters(Initial_Parameters):
             kwargs["w_eta_thrust"] = w_eta_thrust
 
         kwargs["previous_iterate_states"] = initStates
+
+        # Remove any kwargs not in the __init__ signature
+
+        init_params = inspect.signature(cls.__init__).parameters
+        valid_keys = set(init_params.keys()) - {"self"}
+        kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
 
         return cls(**kwargs)

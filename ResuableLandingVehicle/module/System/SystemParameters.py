@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from ..Util.Math import Math, Array3, Number
 from ..Util.PyomoMath import PyomoMath
 
+from functools import cached_property
+
 
 @dataclass
 class SystemParameters:
@@ -77,11 +79,11 @@ class SystemParameters:
         # (Mg/s)/kN * kN - Mg/s = Mg/s
         return -self.alpha * T_Mag - self.mdot_bp  # Total mass depletion rate (Mg/s)
 
-    @property
+    @cached_property
     def g_mag(self) -> float:
         return self.math.norm(self.g)  # km/s^2
 
-    @property
+    @cached_property
     def alpha(self) -> float:
         # Wanted: (Mg/s)/kN
 
@@ -89,7 +91,15 @@ class SystemParameters:
         #
         return 1 / (self.I_sp * self.g_mag * 1000)  # (Mg/s)/kN
 
-    @property
+    @cached_property
     def mdot_bp(self) -> float:
         # kPa * m^2 / (s * km/s^2) = kPa * (m^2 / (1000 m/s)) = Pa * (m * s) = kg/(m * s^2) * (m * s) = kg/s = (1/1000) Mg/s
         return self.P * self.A_nozzle / (self.I_sp * self.g_mag * 1000)  # Mg/s
+
+    @cached_property
+    def initial_speed(self) -> float:
+        return self.math.norm(self.v0)  # km/s
+
+    @cached_property
+    def final_speed(self) -> float:
+        return self.math.norm(self.vf)  # km/s
