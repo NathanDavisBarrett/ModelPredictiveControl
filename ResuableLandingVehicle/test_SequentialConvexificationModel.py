@@ -58,20 +58,13 @@ def test_Iterate_Feasible(headless=True):
     # rep.show()
     # STOP
 
-    solver = pmo.SolverFactory("ipopt")
-    results = solver.solve(
-        model,
-        tee=headless,
-        symbolic_solver_labels=True,
-        options={"halt_on_ampl_error": "yes"},
-    )
-    solver = pmo.SolverFactory("gams", solver="snopt")
+    solver = pmo.SolverFactory("gurobi")
     results = solver.solve(
         model,
         tee=headless,
     )
     # assert results.solver.termination_condition == pmo.TerminationCondition.optimal
-    # assert pmo.value(model.artificial_acceleration_norm) < 1.0
+    assert pmo.value(model.artificial_acceleration_norm) < 1.0
 
     if headless:
         model.Plot()
@@ -105,21 +98,23 @@ def test_n_iterable_run(n_iter=3, headless=True):
                 model_i.artificial_acceleration_norm <= artificial_acc
             )
 
-        solver1 = pmo.SolverFactory("ipopt")
-        results = solver1.solve(
-            model_i,
-            tee=True,
-        )
-
-        solver2 = pmo.SolverFactory("gams", solver="snopt")
-        results = solver2.solve(
-            model_i,
-            tee=True,
-        )
+        solver1 = pmo.SolverFactory("gurobi")
+        results = solver1.solve(model_i, tee=True, options={"NumericFocus": 3})
         print(f"Iteration {i} solve status: ", results.solver.termination_condition)
+
+        if results.solver.termination_condition == pmo.TerminationCondition.error:
+
+            print("Error in solver. Terminating.")
+            break
+
         artificial_acc = pmo.value(model_i.artificial_acceleration_norm)
         print(f"Iteration {i} artificial acc norm: ", artificial_acc)
-        # print(f"Iteration {i} solved in {results.solver.time} s")
+        print(f"Iteration {i} solved in {results.solver.time} s")
+
+    from PyomoTools.kernel import InfeasibilityReport_Interactive
+
+    # rep = InfeasibilityReport_Interactive(model_i)
+    # rep.show()
 
     if headless:
         model_i.Plot()

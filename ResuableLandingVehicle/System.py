@@ -143,7 +143,7 @@ class SystemParameters:
 
     A_nozzle: float = 0.1  # Nozzle exit area (m^2)
 
-    max_glide_slope: float = np.pi / 6  # Maximum glide slope (radians)
+    max_glide_slope: float = np.pi / 2 - np.pi / 6  # Maximum glide slope (radians)
     max_tilt = np.pi / 4  # Maximum tilt angle from vertical (radians)
 
     m_dry: float = 25_000  # Dry mass (kg)

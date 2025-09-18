@@ -105,15 +105,15 @@ class IterationState(InitializationState):
 @dataclass
 class SequentialConvexification_Initial_Parameters(SystemParameters):
     w_m: float = 1.0  # Weight for mass in cost function
-    w_a: float = 1_000.0  # Weight for artificial acceleration in cost function
+    w_a: float = 100.0  # Weight for artificial acceleration in cost function
 
 
 @dataclass(kw_only=True)
 class SequentialConvexification_Iterate_Parameters(
     SequentialConvexification_Initial_Parameters
 ):
-    w_eta_dt: float = 100.0  # Weight for time step change in cost function
-    w_eta_thrust: float = 100.0  # Weight for thrust change in cost function
+    w_eta_dt: float = 10.0  # Weight for time step change in cost function
+    w_eta_thrust: float = 10.0  # Weight for thrust change in cost function
     previous_iterate_states: Iterable[
         IterationState
     ]  # List of previous iteration states for each time step
@@ -601,14 +601,14 @@ class SequentialConvexification_Iterate_Step_Model(
         return previousValue + self.math.dot(derivative, change)
 
     def ComputeDragForce(self) -> Array3:
-        # TODO: Isn't this still non-convex?
-        return self.params.ComputeDragForce(self.velocity)
+        prevItMag = np.linalg.norm(self.prevIterationState.velocity)
+        return self.params.ComputeDragForce(self.velocity, prevItMag)
 
     def NewtonsSecondLaw(self, i):
-        # TODO: Isn't this still non-convex?
+        prevItMass = self.prevIterationState.mass
         return (
-            self.mass * (self.acceleration[i] + self.artificial_acceleration[i])
-            == self.thrust[i] + self.drag_force[i] + self.params.g[i] * self.mass
+            prevItMass * (self.acceleration[i] + self.artificial_acceleration[i])
+            == self.thrust[i] + self.drag_force[i] + self.params.g[i] * prevItMass
         )
 
 
@@ -730,6 +730,10 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         nFigurines = 10
         figurineIndices = np.linspace(0, self.nSteps - 1, nFigurines).astype(int)
         for idx in figurineIndices:
+            if idx == 0:
+                kwargs = dict(label="Thrust Vector")
+            else:
+                kwargs = {}
             threeDimAx.quiver(
                 positions[0, idx],
                 positions[1, idx],
@@ -742,13 +746,33 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
                 color="red",
                 pivot="middle",
                 arrow_length_ratio=0.007,
+                **kwargs,
             )
+
+        xmin = min(min(positions[0, :]), self.params.xf[0])
+        xmax = max(max(positions[0, :]), self.params.xf[0])
+        ymin = min(min(positions[1, :]), self.params.xf[1])
+        ymax = max(max(positions[1, :]), self.params.xf[1])
+        zmin = min(min(positions[2, :]), self.params.xf[2])
+        zmax = max(max(positions[2, :]), self.params.xf[2])
+        xyMin = min(xmin, ymin)
+        xyMax = max(xmax, ymax)
+        x = np.linspace(xyMin, xyMax, 10)
+        y = np.linspace(xyMin, xyMax, 10)
+        X, Y = np.meshgrid(x, y)
+        Z = (
+            np.sin(self.params.max_glide_slope)
+            * np.sqrt((X - self.params.xf[0]) ** 2 + (Y - self.params.xf[1]) ** 2)
+            + self.params.xf[2]
+        )
+        threeDimAx.plot_surface(X, Y, Z, alpha=0.3, color="gray", label="Glide Cone")
         threeDimAx.set_title("3D Trajectory")
         threeDimAx.set_xlabel("X (m)")
         threeDimAx.set_ylabel("Y (m)")
         threeDimAx.set_zlabel("Z (m)")
         threeDimAx.legend()
         threeDimAx.grid()
+        # threeDimAx.set_box_aspect((xmax - xmin, ymax - ymin, zmax - zmin))
 
         plt.tight_layout()
         plt.show()
