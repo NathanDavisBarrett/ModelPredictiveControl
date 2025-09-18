@@ -116,7 +116,7 @@ class NumpyMath(Math):
 
 @dataclass
 class SystemParameters:
-    x0: Array3 = np.array([0, 0, 10_000])  # Initial position (m)
+    x0: Array3 = np.array([500, 0, 10_000])  # Initial position (m)
     v0: Array3 = np.array([0, 0, -500])  # Initial velocity (m/s)
     m0: float = 34_404
     T0: Array3 = np.array(

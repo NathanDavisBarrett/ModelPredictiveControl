@@ -665,9 +665,16 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         )
         masses = np.array([pmo.value(step.mass) for step in self.steps])
 
-        fig, ((posAx, velAx), (accAx, massAx), (thrustAx, _)) = plt.subplots(
-            3, 2, figsize=(10, 15)
-        )
+        fig = plt.figure(figsize=(12, 16))
+        gs = fig.add_gridspec(3, 2)
+        posAx = fig.add_subplot(gs[0, 0])
+        velAx = fig.add_subplot(gs[0, 1])
+        accAx = fig.add_subplot(gs[1, 0])
+        massAx = fig.add_subplot(gs[1, 1])
+        thrustAx = fig.add_subplot(gs[2, 0])
+        from mpl_toolkits.mplot3d import Axes3D
+
+        threeDimAx = fig.add_subplot(gs[2, 1], projection="3d")
         posAx.plot(times, positions[0, :], label="X")
         posAx.plot(times, positions[1, :], label="Y")
         posAx.plot(times, positions[2, :], label="Z")
@@ -714,8 +721,34 @@ class SequantialConvexification_Base_Model(pmo.block, ABC):
         thrustAx.set_ylabel("Thrust (N)")
         thrustAx.legend()
         thrustAx.grid()
-        thrustAx.axhline(self.params.T_min, color="red", linestyle="--")
+        thrustAx.axhline(-self.params.T_max, color="red", linestyle="--")
         thrustAx.axhline(self.params.T_max, color="red", linestyle="--")
+
+        threeDimAx.plot(
+            positions[0, :], positions[1, :], positions[2, :], label="Trajectory"
+        )
+        nFigurines = 10
+        figurineIndices = np.linspace(0, self.nSteps - 1, nFigurines).astype(int)
+        for idx in figurineIndices:
+            threeDimAx.quiver(
+                positions[0, idx],
+                positions[1, idx],
+                positions[2, idx],
+                thrusts[0, idx],
+                thrusts[1, idx],
+                thrusts[2, idx],
+                length=np.linalg.norm(thrusts[:, idx]) / 500,
+                normalize=True,
+                color="red",
+                pivot="middle",
+                arrow_length_ratio=0.007,
+            )
+        threeDimAx.set_title("3D Trajectory")
+        threeDimAx.set_xlabel("X (m)")
+        threeDimAx.set_ylabel("Y (m)")
+        threeDimAx.set_zlabel("Z (m)")
+        threeDimAx.legend()
+        threeDimAx.grid()
 
         plt.tight_layout()
         plt.show()
