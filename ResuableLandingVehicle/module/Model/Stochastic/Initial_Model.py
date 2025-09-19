@@ -54,8 +54,12 @@ class Initial_Model(Base_Model):
             )
         )
 
+        self.objective_expr = pmo.expression(
+            self.artificial_acceleration_cost + self.mass_cost
+        )
+
         self.objective = pmo.objective(
-            expr=(self.artificial_acceleration_cost + self.mass_cost),
+            expr=self.objective_expr,
             sense=pmo.minimize,
         )
 

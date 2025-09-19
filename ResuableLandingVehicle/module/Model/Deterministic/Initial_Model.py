@@ -67,10 +67,12 @@ class Initial_Model(Base_Model):
             sum([step.artificial_acceleration_mag**2 for step in self.steps])
         )  # DEPARTING FROM THE ORIGINAL PAPER HERE. Originally, the 2-norm, but the sum of squares is better to penalize large spikes and allows the gurobi solver so solve the model very quickly (since the objective is now quadratic).
 
+        self.objective_expr = pmo.expression(
+            -params.w_m * self.steps[-1].mass
+            + params.w_a * self.artificial_acceleration_norm
+        )
+
         self.objective = pmo.objective(
-            expr=(
-                -params.w_m * self.steps[-1].mass
-                + params.w_a * self.artificial_acceleration_norm
-            ),
+            expr=self.objective_expr,
             sense=pmo.minimize,
         )

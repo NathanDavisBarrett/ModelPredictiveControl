@@ -46,11 +46,14 @@ class Base_Model(pmo.block, ABC):
 
         # Child class must define root.
 
-    def iter_nodes(self) -> Iterator[Initial_Node]:
+    def iter_nodes(self) -> Iterator[Node]:
         yield from self.root.iter_nodes()
 
-    def iter_leaf_nodes(self) -> Iterator[Initial_Node]:
+    def iter_leaf_nodes(self) -> Iterator[Node]:
         yield from self.root.iter_leaf_nodes()
+
+    def iter_nodes_at_depth(self, depth: int) -> Iterator[Node]:
+        yield from self.root.iter_nodes_at_depth(depth)
 
     def iter_unique_trajectories(self) -> Iterator[Iterable[Node]]:
         # Use memoization to avoid recomputing shared ancestry
@@ -82,7 +85,7 @@ class Base_Model(pmo.block, ABC):
     def getIterationStates(self) -> StateTree:
         return StateTree(self.root.getIterationStates())
 
-    def Plot(self):
+    def Plot(self, axDict: dict = None, withLabels: bool = True):
         # import matplotlib
 
         # matplotlib.use("TkAgg")
@@ -91,15 +94,25 @@ class Base_Model(pmo.block, ABC):
         dt = pmo.value(self.dt)
         times = [self.start + i * dt for i in range(self.max_depth)]
 
-        fig = plt.figure(figsize=(16, 8))
-        gs = fig.add_gridspec(3, 2)
-        posAx = fig.add_subplot(gs[0, 0])
-        velAx = fig.add_subplot(gs[0, 1])
-        accAx = fig.add_subplot(gs[1, 0])
-        massAx = fig.add_subplot(gs[1, 1])
-        thrustAx = fig.add_subplot(gs[2, 0])
+        if axDict is None:
+            show = True
+            fig = plt.figure(figsize=(16, 8))
+            gs = fig.add_gridspec(3, 2)
+            posAx = fig.add_subplot(gs[0, 0])
+            velAx = fig.add_subplot(gs[0, 1])
+            accAx = fig.add_subplot(gs[1, 0])
+            massAx = fig.add_subplot(gs[1, 1])
+            thrustAx = fig.add_subplot(gs[2, 0])
 
-        threeDimAx = fig.add_subplot(gs[2, 1], projection="3d")
+            threeDimAx = fig.add_subplot(gs[2, 1], projection="3d")
+        else:
+            show = False
+            posAx = axDict["posAx"]
+            velAx = axDict["velAx"]
+            accAx = axDict["accAx"]
+            massAx = axDict["massAx"]
+            thrustAx = axDict["thrustAx"]
+            threeDimAx = axDict["threeDimAx"]
 
         colors = {
             "X": "blue",
@@ -107,6 +120,7 @@ class Base_Model(pmo.block, ABC):
             "Z": "green",
             "Mass": "purple",
             "Thrust": "red",
+            "3D": "red",
         }
 
         lineKwargs = {"linewidth": 1, "alpha": 0.7}
@@ -134,13 +148,15 @@ class Base_Model(pmo.block, ABC):
                 "Z": lineKwargs.copy(),
                 "Mass": lineKwargs.copy(),
                 "Thrust": lineKwargs.copy(),
+                "3D": lineKwargs.copy(),
             }
-            if trajNum == 0:
+            if trajNum == 0 and withLabels:
                 kwargs["X"]["label"] = "X"
                 kwargs["Y"]["label"] = "Y"
                 kwargs["Z"]["label"] = "Z"
                 kwargs["Mass"]["label"] = "Mass"
                 kwargs["Thrust"]["label"] = "Thrust"
+                kwargs["3D"]["label"] = "Trajectory"
 
             for k in colors:
                 kwargs[k]["color"] = colors[k]
@@ -167,7 +183,7 @@ class Base_Model(pmo.block, ABC):
             thrustAx.plot(times, thrusts[2, :], **(kwargs["Z"]))
 
             threeDimAx.plot(
-                positions[0, :], positions[1, :], positions[2, :], **(kwargs["Thrust"])
+                positions[0, :], positions[1, :], positions[2, :], **(kwargs["3D"])
             )
 
             xmin = min(min(positions[0, :]), xmin)
@@ -193,7 +209,8 @@ class Base_Model(pmo.block, ABC):
         accAx.legend()
         accAx.grid()
 
-        massAx.axhline(self.params.m_dry, color="red", linestyle="--", label="Dry Mass")
+        label = {"label": "Dry Mass"} if withLabels else {}
+        massAx.axhline(self.params.m_dry, color="red", linestyle="--", **label)
         massAx.set_title("Mass vs Time")
         massAx.set_xlabel("Time (s)")
         massAx.set_ylabel("Mass (Mg)")
@@ -218,7 +235,8 @@ class Base_Model(pmo.block, ABC):
             * np.sqrt((X - self.params.xf[0]) ** 2 + (Y - self.params.xf[1]) ** 2)
             + self.params.xf[2]
         )
-        threeDimAx.plot_surface(X, Y, Z, alpha=0.3, color="gray", label="Glide Cone")
+        label = {"label": "Glide Cone"} if withLabels else {}
+        threeDimAx.plot_surface(X, Y, Z, alpha=0.3, color="gray", **label)
         threeDimAx.set_title("3D Trajectory")
         threeDimAx.set_xlabel("X (km)")
         threeDimAx.set_ylabel("Y (km)")
@@ -228,4 +246,5 @@ class Base_Model(pmo.block, ABC):
         # threeDimAx.set_box_aspect((xmax - xmin, ymax - ymin, zmax - zmin))
 
         plt.tight_layout()
-        plt.show()
+        if show:
+            plt.show()

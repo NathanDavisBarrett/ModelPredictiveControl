@@ -41,12 +41,14 @@ class Iterate_Model(Base_Model):
         dt_change = self.dt - params.previous_iterate_states[0].dt
         self.eta_dt_def = pmo.constraint(dt_change**2 <= self.eta_dt)
 
+        self.objective_expr = pmo.expression(
+            -params.w_m * self.steps[-1].mass
+            + params.w_eta_dt * self.eta_dt
+            + params.w_eta_thrust * self.thrust_change_norm
+            + params.w_a * self.artificial_acceleration_norm
+        )
+
         self.objective = pmo.objective(
-            expr=(
-                -params.w_m * self.steps[-1].mass
-                + params.w_eta_dt * self.eta_dt
-                + params.w_eta_thrust * self.thrust_change_norm
-                + params.w_a * self.artificial_acceleration_norm
-            ),
+            expr=self.objective_expr,
             sense=pmo.minimize,
         )

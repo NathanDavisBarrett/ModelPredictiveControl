@@ -129,8 +129,11 @@ class SystemParameters:
         # Spawn the wind function at the new time
         new_params.wind_function = self.wind_function.spawn(copy_end=spawn_time)
 
-        # Add noise to the specific impulse, air pressure and air density
-        variation = 0.1  # 10% variation
+        # Add noise to the initial mass, specific impulse, air pressure and air density
+        variation = 0.05  # 5% variation
+        new_params.m0 *= 1 + contained_random_number_generator.uniform(
+            -variation, variation
+        )
         new_params.I_sp *= 1 + contained_random_number_generator.uniform(
             -variation, variation
         )
@@ -140,6 +143,13 @@ class SystemParameters:
         new_params.rho *= 1 + contained_random_number_generator.uniform(
             -variation, variation
         )
+
+        # Add fixed amount of noise to the initial position and velocity
+        position_noise = 0.01  # km
+        new_params.x0 += np.random.uniform(-position_noise, position_noise, size=3)
+
+        velocity_noise = 0.01  # km/s
+        new_params.v0 += np.random.uniform(-velocity_noise, velocity_noise, size=3)
 
         for prop in ["g_mag", "alpha", "mdot_bp", "initial_speed", "final_speed"]:
             if prop in new_params.__dict__:

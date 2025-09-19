@@ -81,6 +81,13 @@ class Iterate_Node(Iterate_Step_Model):
             for child in self.child_nodes:
                 yield from child.iter_leaf_nodes()
 
+    def iter_nodes_at_depth(self, depth: int) -> Iterator["Iterate_Node"]:
+        if self.depth == depth:
+            yield self
+        elif self.depth < depth:
+            for child in self.child_nodes:
+                yield from child.iter_nodes_at_depth(depth)
+
     def getIterationStates(self):
         node = State_Node(self.getIterationState())
         for child in self.child_nodes:
