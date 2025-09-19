@@ -1,3 +1,22 @@
+"""
+Iterate_Model
+=============
+
+This class represents the iterative model for a deterministic system. It extends the `Base_Model` class and incorporates logic for iterative optimization.
+
+Attributes:
+    params (Iterate_Parameters): Parameters for the iterative model.
+    nSteps (int): Number of steps in the simulation.
+    start (float): Start time of the simulation.
+    steps (pmo.block_list): List of step models for the simulation.
+    artificial_acceleration_norm (pmo.expression): Expression to penalize large spikes in artificial acceleration.
+    thrust_change_norm (pmo.expression): Expression to penalize large spikes in thrust changes.
+    eta_dt (pmo.variable): Variable for time step adjustment.
+
+Methods:
+    __init__: Initializes the iterative model with the given parameters.
+"""
+
 from .Base_Model import Base_Model
 from ..Parameters import Iterate_Parameters
 from ..Step_Model import Iterate_Step_Model
@@ -6,12 +25,36 @@ import pyomo.kernel as pmo
 
 
 class Iterate_Model(Base_Model):
+    """
+    Iterate_Model
+    ------------
+
+    Represents the iterative model for a deterministic system.
+
+    Attributes:
+        params (Iterate_Parameters): Parameters for the iterative model.
+        nSteps (int): Number of steps in the simulation.
+        start (float): Start time of the simulation.
+        steps (pmo.block_list): List of step models for the simulation.
+        artificial_acceleration_norm (pmo.expression): Expression to penalize large spikes in artificial acceleration.
+        thrust_change_norm (pmo.expression): Expression to penalize large spikes in thrust changes.
+        eta_dt (pmo.variable): Variable for time step adjustment.
+    """
+
     def __init__(
         self,
         params: Iterate_Parameters,
         nSteps: int,
         start: float,
     ):
+        """
+        Initializes the iterative model with the given parameters.
+
+        Args:
+            params (Iterate_Parameters): Parameters for the iterative model.
+            nSteps (int): Number of steps in the simulation.
+            start (float): Start time of the simulation.
+        """
         super().__init__(params, nSteps, start, stop=None)
 
         self.steps = pmo.block_list()

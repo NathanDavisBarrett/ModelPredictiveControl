@@ -1,7 +1,13 @@
+"""
+WindGenerator
+=============
+
+This module defines the `Wind_TimeSeries` and `Wind_Function` classes, which model general time series for wind dynamics, including magnitudes and angles.
+"""
+
 from sklearn.gaussian_process.kernels import Matern
 from sklearn.gaussian_process import GaussianProcessRegressor
 import numpy as np
-import time
 from scipy.interpolate import CubicSpline as interp1d
 
 
@@ -11,6 +17,25 @@ wind_rng = Random()
 
 
 class Wind_TimeSeries:
+    """
+    Wind_TimeSeries
+    ----------------
+
+    Models a time series of wind magnitudes or angles using Gaussian processes.
+
+    Attributes:
+        correlation_coef (float): Coefficient for magnitude-to-variance conversion.
+        variance (float): Variance of the wind magnitude or angle.
+        magnitude (float): Magnitude of the wind or angle.
+        bias (float): Bias added to the wind magnitude or angle.
+        length_scale (float): Length scale for the Gaussian process kernel.
+        start_time (float): Start time of the time series.
+        end_time (float): End time of the time series.
+        ts (np.ndarray): Time points for the time series.
+        values (np.ndarray): Wind magnitudes or angles at the time points.
+        func (callable): Interpolated function for the time series.
+    """
+
     correlation_coef = 2.45
 
     def __init__(
@@ -25,6 +50,24 @@ class Wind_TimeSeries:
         resolution=100,
         training_points=None,
     ):
+        """
+        Initializes the `Wind_TimeSeries` with the given parameters.
+
+        Args:
+            end_time (float): End time of the time series.
+            start_time (float, optional): Start time of the time series. Defaults to 0.0.
+            variance (float, optional): Variance of the wind magnitude. Defaults to None.
+            magnitude (float, optional): Magnitude of the wind. Defaults to None.
+            bias (float, optional): Bias added to the wind magnitude. Defaults to 0.0.
+            random_state (int, optional): Random state for reproducibility. Defaults to None.
+            length_scale (float, optional): Length scale for the Gaussian process kernel. Defaults to 15.0.
+            resolution (int, optional): Resolution of the time series. Defaults to 100.
+            training_points (np.ndarray, optional): Training points for the Gaussian process. Defaults to None.
+
+        Raises:
+            ValueError: If both `variance` and `magnitude` are specified or neither is specified.
+        """
+
         if (variance is None and magnitude is None) or (
             variance is not None and magnitude is not None
         ):
@@ -83,6 +126,21 @@ class Wind_TimeSeries:
         resolution=100,
         random_state=None,
     ):
+        """
+        Creates a new `Wind_TimeSeries` instance with variations for stochastic modeling.
+
+        Args:
+            copy_end (float): End time for the copied time series.
+            copy_start (float, optional): Start time for the copied time series. Defaults to None.
+            new_start_time (float, optional): Start time for the new time series. Defaults to None.
+            new_end_time (float, optional): End time for the new time series. Defaults to None.
+            resolution (int, optional): Resolution of the new time series. Defaults to 100.
+            random_state (int, optional): Random state for reproducibility. Defaults to None.
+
+        Returns:
+            Wind_TimeSeries: A new instance with variations applied.
+        """
+
         if copy_start is None:
             copy_start = self.start_time
         if new_start_time is None:
@@ -115,6 +173,21 @@ class Wind_TimeSeries:
 
 
 class Wind_Function:
+    """
+    Wind_Function
+    ------------
+
+    Models wind dynamics in spherical coordinates using `Wind_TimeSeries` for magnitudes and angles.
+
+    Attributes:
+        magnitude (float): Magnitude of the wind.
+        start_time (float): Start time of the wind function.
+        end_time (float): End time of the wind function.
+        magnitude_series (Wind_TimeSeries): Time series for wind magnitude.
+        theta_series (Wind_TimeSeries): Time series for azimuth angle.
+        phi_series (Wind_TimeSeries): Time series for elevation angle.
+    """
+
     def __init__(
         self,
         magnitude,
@@ -125,6 +198,19 @@ class Wind_Function:
         resolution=100,
         training_points=None,
     ):
+        """
+        Initializes the `Wind_Function` with the given parameters.
+
+        Args:
+            magnitude (float): Magnitude of the wind.
+            bias (float): Bias added to the wind magnitude.
+            end_time (float): End time of the wind function.
+            start_time (float, optional): Start time of the wind function. Defaults to 0.0.
+            random_state (int, optional): Random state for reproducibility. Defaults to None.
+            resolution (int, optional): Resolution of the wind function. Defaults to 100.
+            training_points (np.ndarray, optional): Training points for the wind function. Defaults to None.
+        """
+
         self.magnitude = magnitude
         self.start_time = start_time
         self.end_time = end_time
@@ -188,6 +274,21 @@ class Wind_Function:
         resolution=100,
         random_state=None,
     ):
+        """
+        Creates a new `Wind_Function` instance with variations for stochastic modeling.
+
+        Args:
+            copy_end (float): End time for the copied wind function.
+            copy_start (float, optional): Start time for the copied wind function. Defaults to None.
+            new_start_time (float, optional): Start time for the new wind function. Defaults to None.
+            new_end_time (float, optional): End time for the new wind function. Defaults to None.
+            resolution (int, optional): Resolution of the new wind function. Defaults to 100.
+            random_state (int, optional): Random state for reproducibility. Defaults to None.
+
+        Returns:
+            Wind_Function: A new instance with variations applied.
+        """
+
         if copy_start is None:
             copy_start = self.start_time
         if new_start_time is None:
@@ -221,12 +322,34 @@ class Wind_Function:
         )
 
     def evaluate_spherical(self, t, include_bias=True):
+        """
+        Evaluates the wind function in spherical coordinates.
+
+        Args:
+            t (float): Time at which to evaluate the wind function.
+            include_bias (bool, optional): Whether to include the bias in the evaluation. Defaults to True.
+
+        Returns:
+            tuple: Magnitude, azimuth, and elevation of the wind at time `t`.
+        """
+
         mag = self.magnitude_series(t, include_bias=include_bias)
         theta = self.theta_series(t, include_bias=include_bias)
         phi = self.phi_series(t, include_bias=include_bias)
         return mag, theta, phi
 
     def __call__(self, t, include_bias=True):
+        """
+        Evaluates the wind function in Cartesian coordinates.
+
+        Args:
+            t (float): Time at which to evaluate the wind function.
+            include_bias (bool, optional): Whether to include the bias in the evaluation. Defaults to True.
+
+        Returns:
+            np.ndarray: Wind vector in Cartesian coordinates at time `t`.
+        """
+
         mag, theta, phi = self.evaluate_spherical(t, include_bias=include_bias)
 
         x = mag * np.sin(theta) * np.cos(phi)
@@ -255,8 +378,6 @@ class Wind_Function:
 if __name__ == "__main__":
     # EXAMPLE USAGE
     import matplotlib.pyplot as plt
-
-    import matplotlib.animation as animation
 
     rand = None
     wind = Wind_Function(

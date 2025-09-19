@@ -1,4 +1,11 @@
-from ..Util.Math import Math, Array3
+"""
+System
+======
+
+This module defines the `System` class, which models the dynamics of a physical system, including position, velocity, mass, and thrust.
+"""
+
+from ..Util.Math import Array3
 from .SystemParameters import SystemParameters
 
 from warnings import warn
@@ -6,12 +13,39 @@ import numpy as np
 
 
 class System:
+    """
+    System
+    ------
+
+    Models the dynamics of a physical system, including position, velocity, mass, and thrust.
+
+    Attributes:
+        params (SystemParameters): Parameters defining the system.
+        math (Math): Utility for mathematical operations.
+        reference_mass (float): Reference mass for the system.
+        reference_speed (float): Reference speed for the system.
+        x (Array3): Position vector.
+        v (Array3): Velocity vector.
+        m (float): Mass of the system.
+        T (Array3): Thrust vector.
+        T_Mag (float): Magnitude of the thrust.
+        t (float): Current time.
+    """
+
     def __init__(
         self,
         params: SystemParameters,
         reference_mass: float = None,
         reference_speed: float = None,
     ):
+        """
+        Initializes the `System` with the given parameters.
+
+        Args:
+            params (SystemParameters): Parameters defining the system.
+            reference_mass (float, optional): Reference mass for the system. Defaults to None.
+            reference_speed (float, optional): Reference speed for the system. Defaults to None.
+        """
         self.params = params
         self.math = params.math
 
@@ -21,6 +55,9 @@ class System:
         self.Reset()
 
     def Reset(self):
+        """
+        Resets the system to its initial state.
+        """
         self.x = self.params.x0.copy()
         self.v = self.params.v0.copy()
         self.m = self.params.m0
@@ -29,6 +66,17 @@ class System:
         self.t = 0.0
 
     def step(self, T: Array3, dt: float):
+        """
+        Advances the system by one time step.
+
+        Args:
+            T (Array3): Thrust vector.
+            dt (float): Time step duration.
+
+        Notes:
+            - Updates position, velocity, and mass based on the applied thrust.
+            - Checks for violations of technical limits, such as glide slope, thrust magnitude, and tilt angle.
+        """
         self.t += dt  # s
 
         T_Mag = self.math.norm(T)  # kN

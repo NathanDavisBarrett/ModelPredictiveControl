@@ -1,3 +1,12 @@
+"""
+Base_Step_Model
+===============
+
+This module defines the `Base_Step_Model` class, which serves as an abstract base class for modeling a single step in a simulation.
+It provides methods for defining variables, constraints, and evolution functions for mass, position, and velocity.
+Subclasses must implement abstract methods to define specific behaviors.
+"""
+
 from ..State import InitializationState, State, IterationState
 from ...System import SystemParameters
 from ...Util.Math import Array3
@@ -12,6 +21,22 @@ from PyomoTools.kernel.Formulations import Conic
 
 
 class Base_Step_Model(pmo.block, ABC):
+    """
+    Base_Step_Model
+    ----------------
+
+    Abstract base class for modeling a single step in a simulation.
+
+    Attributes:
+        t_est (float): Estimated time for determining wind speed.
+        params (SystemParameters): System parameters for the simulation.
+        dt (Union[float, pmo.variable]): Time step duration.
+        prevState (State): State of the system in the previous step.
+        isFinal (bool): Indicates whether this is the final step.
+        otherParams (Dict[str, Any]): Additional parameters for the step model.
+        initializationState (InitializationState): Initial state of the system.
+    """
+
     X = 0
     Y = 1
     Z = 2
@@ -26,6 +51,18 @@ class Base_Step_Model(pmo.block, ABC):
         otherParams: Dict[str, Any] = {},
         initializationState: InitializationState = None,
     ):
+        """
+        Initializes the `Base_Step_Model` with the given parameters.
+
+        Args:
+            t_est (float): Estimated time for determining wind speed.
+            params (SystemParameters): System parameters for the simulation.
+            dt (Union[float, pmo.variable]): Time step duration.
+            prevState (State, optional): State of the system in the previous step. Defaults to None.
+            isFinal (bool, optional): Indicates whether this is the final step. Defaults to False.
+            otherParams (Dict[str, Any], optional): Additional parameters for the step model. Defaults to {}.
+            initializationState (InitializationState, optional): Initial state of the system. Defaults to None.
+        """
         super().__init__()
 
         self.t_est = t_est
@@ -46,9 +83,21 @@ class Base_Step_Model(pmo.block, ABC):
 
     @property
     def dt(self):
+        """
+        Retrieves the time step duration.
+
+        Returns:
+            Union[float, pmo.variable]: Time step duration.
+        """
         return self._dt()
 
     def variables(self, initializationState: InitializationState = None):
+        """
+        Defines the variables for the step model, including mass, position, velocity, acceleration, and thrust.
+
+        Args:
+            initializationState (InitializationState, optional): Initial state of the system. Defaults to None.
+        """
 
         mass_val = (
             pmo.value(self.prevState.mass)
@@ -130,6 +179,17 @@ class Base_Step_Model(pmo.block, ABC):
         )
 
     def base_mass_evolution_function(self, dt, gamma, prev_gamma):
+        """
+        Computes the base mass evolution function.
+
+        Args:
+            dt: Time step duration.
+            gamma: Current thrust magnitude.
+            prev_gamma: Previous thrust magnitude.
+
+        Returns:
+            float: Change in mass over the time step.
+        """
         # s * ((Mg/s)/kN * (kN) + Mg/s) = Mg
         return -dt * (
             self.params.alpha / 2 * (gamma + prev_gamma) + self.params.mdot_bp
@@ -137,43 +197,127 @@ class Base_Step_Model(pmo.block, ABC):
 
     @abstractmethod
     def mass_evolution_function(self, dt, gamma, prev_gamma):
+        """
+        Abstract method for computing the mass evolution function.
+
+        Args:
+            dt: Time step duration.
+            gamma: Current thrust magnitude.
+            prev_gamma: Previous thrust magnitude.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
+        """
         raise NotImplementedError(
             "Subclasses must implement mass_evolution_function method"
         )
 
     def base_position_evolution_function(self, dt, prev_vel_i, accel_i, prev_accel_i):
+        """
+        Computes the base position evolution function.
+
+        Args:
+            dt: Time step duration.
+            prev_vel_i: Previous velocity component.
+            accel_i: Current acceleration component.
+            prev_accel_i: Previous acceleration component.
+
+        Returns:
+            float: Change in position over the time step.
+        """
         # s * (km/s) + (km/s^2 * s^2) = km
         return dt * prev_vel_i + (accel_i + prev_accel_i / 2) / 3 * dt**2
 
     @abstractmethod
     def position_evolution_function(self, dt, prev_vel_i, accel_i, prev_accel_i):
+        """
+        Abstract method for computing the position evolution function.
+
+        Args:
+            dt: Time step duration.
+            prev_vel_i: Previous velocity component.
+            accel_i: Current acceleration component.
+            prev_accel_i: Previous acceleration component.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
+        """
         raise NotImplementedError(
             "Subclasses must implement position_evolution_function method"
         )
 
     def base_velocity_evolution_function(self, dt, accel_i, prev_accel_i):
+        """
+        Computes the base velocity evolution function.
+
+        Args:
+            dt: Time step duration.
+            accel_i: Current acceleration component.
+            prev_accel_i: Previous acceleration component.
+
+        Returns:
+            float: Change in velocity over the time step.
+        """
         # s * (km/s^2) = km/s
         return (accel_i + prev_accel_i) / 2 * dt
 
     @abstractmethod
     def velocity_evolution_function(self, dt, accel_i, prev_accel_i):
+        """
+        Abstract method for computing the velocity evolution function.
+
+        Args:
+            dt: Time step duration.
+            accel_i: Current acceleration component.
+            prev_accel_i: Previous acceleration component.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
+        """
         raise NotImplementedError(
             "Subclasses must implement velocity_evolution_function method"
         )
 
     @abstractmethod
     def ComputeDragForce(self) -> Array3:
+        """
+        Abstract method for computing the drag force.
+
+        Returns:
+            Array3: Computed drag force.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
+        """
         raise NotImplementedError("Subclasses must implement ComputeDragForce method")
 
     @cached_property
     def wind_velocity(self) -> Array3:
+        """
+        Computes the wind velocity at the estimated time.
+
+        Returns:
+            Array3: Computed wind velocity.
+        """
         return self.params.wind_function(self.t_est)[0]
 
     @abstractmethod
     def NewtonsSecondLaw(self, i):
+        """
+        Abstract method for computing Newton's second law.
+
+        Args:
+            i: Index for the computation.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
+        """
         raise NotImplementedError("Subclasses must implement NewtonsSecondLaw method")
 
     def constraints(self):
+        """
+        Defines the constraints for the step model, including mass evolution, position evolution, and velocity evolution.
+        """
         # Linear Constraint (constant dt)
         self.mass_evolution = pmo.constraint(
             self.mass - self.prevState.mass
@@ -262,6 +406,9 @@ class Base_Step_Model(pmo.block, ABC):
         )  # kN = (kN/s) * s
 
     def final_constraints(self):
+        """
+        Defines the final constraints for the step model, including position, velocity, and direction constraints.
+        """
         self.final_position = pmo.constraint_list()
         self.final_velocity = pmo.constraint_list()
         self.final_direction = pmo.constraint_list()
@@ -277,6 +424,12 @@ class Base_Step_Model(pmo.block, ABC):
             )
 
     def getState(self) -> State:
+        """
+        Retrieves the current state of the system.
+
+        Returns:
+            State: Current state of the system.
+        """
         return State(
             mass=self.mass,
             position=self.position,
@@ -287,6 +440,12 @@ class Base_Step_Model(pmo.block, ABC):
         )
 
     def getIterationState(self) -> IterationState:
+        """
+        Retrieves the iteration state of the system.
+
+        Returns:
+            IterationState: Iteration state of the system.
+        """
         return IterationState(
             dt=pmo.value(self.dt),
             mass=pmo.value(self.mass),

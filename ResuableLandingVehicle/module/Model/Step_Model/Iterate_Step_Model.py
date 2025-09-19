@@ -1,3 +1,10 @@
+"""
+Iterate_Step_Model
+==================
+
+This module defines the `Iterate_Step_Model` class, which extends the `Base_Step_Model` to provide specific implementations for iterative steps in a simulation.
+"""
+
 from .Base_Step_Model import Base_Step_Model
 from ...System import SystemParameters
 from ...Util.Math import Array3
@@ -9,15 +16,41 @@ from typing import Union
 
 
 class Iterate_Step_Model(Base_Step_Model):
+    """
+    Iterate_Step_Model
+    ------------------
+
+    Extends the `Base_Step_Model` to provide specific implementations for iterative steps in a simulation.
+
+    Attributes:
+        t_est (float): Estimated time for determining wind speed.
+        params (SystemParameters): System parameters for the simulation.
+        dt (Union[float, pmo.variable]): Time step duration.
+        prevTimeState (State): State of the system in the previous time step.
+        prevIterationState (IterationState): State of the system in the previous iteration.
+        isFinal (bool): Indicates whether this is the final step.
+    """
+
     def __init__(
         self,
-        t_est: float,  # Estimated time (used for determining wind speed)
+        t_est: float,
         params: SystemParameters,
         dt: Union[float, pmo.variable],
         prevTimeState: State,
         prevIterationState: IterationState,
         isFinal: bool = False,
     ):
+        """
+        Initializes the `Iterate_Step_Model` with the given parameters.
+
+        Args:
+            t_est (float): Estimated time for determining wind speed.
+            params (SystemParameters): System parameters for the simulation.
+            dt (Union[float, pmo.variable]): Time step duration.
+            prevTimeState (State): State of the system in the previous time step.
+            prevIterationState (IterationState): State of the system in the previous iteration.
+            isFinal (bool, optional): Indicates whether this is the final step. Defaults to False.
+        """
 
         super().__init__(
             t_est=t_est,
@@ -32,6 +65,12 @@ class Iterate_Step_Model(Base_Step_Model):
         )
 
     def variables(self, initializationState: InitializationState = None):
+        """
+        Defines the variables for the iterative step model, including thrust change and eta_thrust.
+
+        Args:
+            initializationState (InitializationState, optional): Initial state of the system. Defaults to None.
+        """
         super().variables(initializationState=initializationState)
 
         thrust_change = self.math.vector_add(
@@ -44,6 +83,9 @@ class Iterate_Step_Model(Base_Step_Model):
         self.eta_thrust = pmo.variable(domain=pmo.NonNegativeReals, value=eta_val)
 
     def constraints(self):
+        """
+        Defines the constraints for the iterative step model, including thrust change constraints.
+        """
         super().constraints()
 
         # Nonlinear, Convex Constraint
@@ -55,6 +97,17 @@ class Iterate_Step_Model(Base_Step_Model):
         )
 
     def base_mass_evolution_derivative(self, dt, gamma, prev_gamma):
+        """
+        Computes the derivative of the base mass evolution function.
+
+        Args:
+            dt (float): Time step duration.
+            gamma (float): Current thrust magnitude.
+            prev_gamma (float): Previous thrust magnitude.
+
+        Returns:
+            List[float]: Derivatives of the mass evolution function with respect to dt, gamma, and prev_gamma.
+        """
         # 0: (Mg/s)/kN * kN - Mg/s = Mg/s
         # 1: s * (Mg/s)/kN = Mg/kN
         # 2: s * (Mg/s)/kN = Mg/kN
@@ -67,6 +120,17 @@ class Iterate_Step_Model(Base_Step_Model):
         ]
 
     def mass_evolution_function(self, dt, gamma, prev_gamma):
+        """
+        Computes the mass evolution function for the iterative step using a 1st order Taylor approximation of the original constraint.
+
+        Args:
+            dt (float): Time step duration.
+            gamma (float): Current thrust magnitude.
+            prev_gamma (float): Previous thrust magnitude.
+
+        Returns:
+            float: Change in mass over the time step.
+        """
         previousValue = self.base_mass_evolution_function(
             dt=self.prevIterationState.dt,
             gamma=self.prevIterationState.gamma,
@@ -90,6 +154,18 @@ class Iterate_Step_Model(Base_Step_Model):
         return previousValue + self.math.dot(derivative, change)
 
     def base_position_evolution_derivative(self, dt, prev_vel_i, accel_i, prev_accel_i):
+        """
+        Computes the derivative of the base position evolution function.
+
+        Args:
+            dt (float): Time step duration.
+            prev_vel_i (float): Previous velocity component.
+            accel_i (float): Current acceleration component.
+            prev_accel_i (float): Previous acceleration component.
+
+        Returns:
+            List[float]: Derivatives of the position evolution function with respect to dt, prev_vel_i, accel_i, and prev_accel_i.
+        """
         # 0: (km/s) + (km/s^2 * s) = km/s + km/s = km/s
         # 1: s = s
         # 2: s^2 = s^2
@@ -102,6 +178,19 @@ class Iterate_Step_Model(Base_Step_Model):
         ]
 
     def position_evolution_function(self, dt, prev_vel_i, accel_i, prev_accel_i, i):
+        """
+        Computes the position evolution function for the iterative step using a 1st order Taylor approximation of the original constraint.
+
+        Args:
+            dt (float): Time step duration.
+            prev_vel_i (float): Previous velocity component.
+            accel_i (float): Current acceleration component.
+            prev_accel_i (float): Previous acceleration component.
+            i (int): Index of the component.
+
+        Returns:
+            float: Change in position over the time step.
+        """
         previousValue = self.base_position_evolution_function(
             dt=self.prevIterationState.dt,
             prev_vel_i=self.prevIterationState.prev_velocity[i],
@@ -128,6 +217,17 @@ class Iterate_Step_Model(Base_Step_Model):
         return previousValue + self.math.dot(derivative, change)
 
     def base_velocity_evolution_derivative(self, dt, accel_i, prev_accel_i):
+        """
+        Computes the derivative of the base velocity evolution function.
+
+        Args:
+            dt (float): Time step duration.
+            accel_i (float): Current acceleration component.
+            prev_accel_i (float): Previous acceleration component.
+
+        Returns:
+            List[float]: Derivatives of the velocity evolution function with respect to dt, accel_i, and prev_accel_i.
+        """
         # 0: (km/s^2) + (km/s^2) = km/s^2
         # 1: s = s
         # 2: s = s
@@ -138,6 +238,18 @@ class Iterate_Step_Model(Base_Step_Model):
         ]
 
     def velocity_evolution_function(self, dt, accel_i, prev_accel_i, i):
+        """
+        Computes the velocity evolution function for the iterative step using a 1st order Taylor approximation of the original constraint.
+
+        Args:
+            dt (float): Time step duration.
+            accel_i (float): Current acceleration component.
+            prev_accel_i (float): Previous acceleration component.
+            i (int): Index of the component.
+
+        Returns:
+            float: Change in velocity over the time step.
+        """
         previousValue = self.base_velocity_evolution_function(
             dt=self.prevIterationState.dt,
             accel_i=self.prevIterationState.acceleration[i],
@@ -161,6 +273,12 @@ class Iterate_Step_Model(Base_Step_Model):
         return previousValue + self.math.dot(derivative, change)
 
     def ComputeDragForce(self) -> Array3:
+        """
+        Computes the drag force for the iterative step. Note the linearization at play: The usage of the previous iteration's drag velocity magnitude instead of the 2-norm of the effective velocity.
+
+        Returns:
+            Array3: Drag force vector.
+        """
         prev_drag_velocity = self.math.vector_add(
             self.prevIterationState.prev_velocity, self.prevIterationState.wind_velocity
         )
@@ -170,6 +288,15 @@ class Iterate_Step_Model(Base_Step_Model):
         return self.params.ComputeDragForce(drag_velocity, prevItMag)  # kN
 
     def NewtonsSecondLaw(self, i):
+        """
+        Defines Newton's Second Law for the iterative step. Note the linearization at play: The usage of the previous iteration's mass instead of the variable mass (which would result in a bilinear term).
+
+        Args:
+            i (int): Index of the component.
+
+        Returns:
+            Constraint: Newton's Second Law constraint for the given component.
+        """
         prevItMass = self.prevIterationState.mass
         # Mg * (km/s^2 + km/s^2) = kN + kN + (km/s^2 * Mg)
         # Mg * (km/s^2) = kN + (km/s^2 * Mg)

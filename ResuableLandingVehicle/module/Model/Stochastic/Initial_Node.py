@@ -1,3 +1,10 @@
+"""
+Initial_Node
+============
+
+This module defines the `Initial_Node` class, which extends the `Initial_Step_Model` to represent a node in the stochastic tree for the initial model.
+"""
+
 from ..Step_Model import Initial_Step_Model
 from ...System import SystemParameters
 from ..State import State, InitializationState
@@ -8,6 +15,22 @@ from typing import Iterator
 
 
 class Initial_Node(Initial_Step_Model):
+    """
+    Initial_Node
+    ------------
+
+    Extends the `Initial_Step_Model` to represent a node in the stochastic tree for the initial model.
+
+    Attributes:
+        t (float): Time associated with the node.
+        params (SystemParameters): System parameters for the node.
+        dt (float): Fixed time step duration for the initial guess.
+        depth (int): Depth of the node in the stochastic tree.
+        max_depth (int): Maximum depth of the stochastic tree.
+        probability (float): Probability associated with the node.
+        child_nodes (pmo.block_list): List of child nodes.
+    """
+
     def __init__(
         self,
         t: float,
@@ -18,6 +41,19 @@ class Initial_Node(Initial_Step_Model):
         prevState: State = None,
         initializationState: InitializationState = None,
     ):
+        """
+        Initializes the `Initial_Node` with the given parameters.
+
+        Args:
+            t (float): Time associated with the node.
+            params (SystemParameters): System parameters for the node.
+            dt (float): Fixed time step duration for the initial guess.
+            depth (int): Depth of the node in the stochastic tree.
+            max_depth (int): Maximum depth of the stochastic tree.
+            prevState (State, optional): State of the system in the previous step. Defaults to None.
+            initializationState (InitializationState, optional): Initial state of the system. Defaults to None.
+        """
+
         # NOTE: DO NOT create any class attributes before calling super().__init__(). Pyomo will crash if you do.
 
         initialSpeed = params.initial_speed
@@ -50,6 +86,13 @@ class Initial_Node(Initial_Step_Model):
         self.child_nodes = pmo.block_list()
 
     def setProbability(self):
+        """
+        Sets the probability for the node and propagates it to child nodes.
+
+        Notes:
+            - The root node is assigned a probability of 1.0.
+            - Child nodes inherit probabilities based on the number of siblings.
+        """
         if self.depth == 0:
             self.probability = 1.0
         else:
@@ -66,6 +109,19 @@ class Initial_Node(Initial_Step_Model):
         params: SystemParameters = None,
         initializationState: InitializationState = None,
     ) -> "Initial_Node":
+        """
+        Adds a child node to the current node.
+
+        Args:
+            params (SystemParameters, optional): System parameters for the child node. Defaults to None.
+            initializationState (InitializationState, optional): Initial state for the child node. Defaults to None.
+
+        Returns:
+            Initial_Node: The newly created child node.
+
+        Raises:
+            ValueError: If the node is at the maximum depth.
+        """
         if self.depth >= self.max_depth:
             raise ValueError("Cannot add child to node at max depth")
 
@@ -82,11 +138,23 @@ class Initial_Node(Initial_Step_Model):
         return child
 
     def iter_nodes(self) -> Iterator["Initial_Node"]:
+        """
+        Iterates over all nodes in the subtree rooted at the current node.
+
+        Yields:
+            Iterator[Initial_Node]: An iterator over all nodes in the subtree.
+        """
         yield self
         for child in self.child_nodes:
             yield from child.iter_nodes()
 
     def iter_leaf_nodes(self) -> Iterator["Initial_Node"]:
+        """
+        Iterates over all leaf nodes in the subtree rooted at the current node.
+
+        Yields:
+            Iterator[Initial_Node]: An iterator over all leaf nodes in the subtree.
+        """
         if len(self.child_nodes) == 0:
             yield self
         else:
@@ -94,6 +162,15 @@ class Initial_Node(Initial_Step_Model):
                 yield from child.iter_leaf_nodes()
 
     def iter_nodes_at_depth(self, depth: int) -> Iterator["Initial_Node"]:
+        """
+        Iterates over all nodes at a specific depth in the subtree rooted at the current node.
+
+        Args:
+            depth (int): Depth level to iterate over.
+
+        Yields:
+            Iterator[Initial_Node]: An iterator over nodes at the specified depth.
+        """
         if self.depth == depth:
             yield self
         elif self.depth < depth:
@@ -101,6 +178,12 @@ class Initial_Node(Initial_Step_Model):
                 yield from child.iter_nodes_at_depth(depth)
 
     def getIterationStates(self):
+        """
+        Retrieves the iteration states of the subtree rooted at the current node.
+
+        Returns:
+            State_Node: A tree structure containing iteration states.
+        """
         node = State_Node(self.getIterationState())
         for child in self.child_nodes:
             node.children.append(child.getIterationStates())

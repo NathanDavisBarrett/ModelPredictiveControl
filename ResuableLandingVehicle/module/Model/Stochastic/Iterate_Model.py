@@ -1,7 +1,13 @@
+"""
+Iterate_Model
+=============
+
+This module defines the `Iterate_Model` class, which extends the `Base_Model` to represent an iterative model in the stochastic optimization process.
+"""
+
 from .Base_Model import Base_Model
 from .Iterate_Node import Iterate_Node
 from .StateTree import State_Node
-from ..State import IterationState
 from ..Parameters import Iterate_Parameters, Initial_Parameters
 from ..Step_Model import Base_Step_Model
 
@@ -10,10 +16,34 @@ import pyomo.kernel as pmo
 
 
 class Iterate_Model(Base_Model):
+    """
+    Iterate_Model
+    -------------
+
+    Extends the `Base_Model` to represent an iterative model in the stochastic optimization process.
+
+    Attributes:
+        previousIterationStates (State_Node): States from the previous iteration.
+        root (Iterate_Node): Root node of the stochastic tree for the current iteration.
+        artificial_acceleration_cost (pmo.expression): Cost associated with artificial acceleration.
+        mass_cost (pmo.expression): Cost associated with mass.
+        thrust_change_cost (pmo.expression): Cost associated with thrust changes.
+        eta_dt (pmo.variable): Variable representing the change in time step.
+        eta_dt_def (pmo.constraint): Constraint on the change in time step.
+        objective_expr (pmo.expression): Expression for the objective function.
+        objective (pmo.objective): Objective function for the model.
+    """
+
     def __init__(
         self,
         previousIterationModel: Base_Model,
     ):
+        """
+        Initializes the `Iterate_Model` with the given parameters.
+
+        Args:
+            previousIterationModel (Base_Model): The model from the previous iteration.
+        """
         params = self.get_params_from_model(previousIterationModel)
         super().__init__(
             params,
@@ -46,6 +76,18 @@ class Iterate_Model(Base_Model):
 
     @staticmethod
     def get_params_from_model(model: Base_Model) -> Iterate_Parameters:
+        """
+        Extracts parameters from the given model.
+
+        Args:
+            model (Base_Model): The model to extract parameters from.
+
+        Returns:
+            Iterate_Parameters: Parameters for the iterative model.
+
+        Raises:
+            ValueError: If the model parameters are of an unknown type.
+        """
         if isinstance(model.params, Initial_Parameters):
             return Iterate_Parameters.from_initial_params(
                 model.params,
@@ -65,6 +107,14 @@ class Iterate_Model(Base_Model):
         childStateNodes: Iterable[State_Node],
         prevIterationNode: Base_Step_Model,
     ):
+        """
+        Propagates initialization through the stochastic tree.
+
+        Args:
+            node (Iterate_Node): Current node in the stochastic tree.
+            childStateNodes (Iterable[State_Node]): Child state nodes from the previous iteration.
+            prevIterationNode (Base_Step_Model): Node from the previous iteration.
+        """
         for i in range(len(childStateNodes)):
             prevIterationNode_i = prevIterationNode.child_nodes[i]
             prevIterParams = self.get_params_from_model(prevIterationNode_i)
@@ -84,6 +134,13 @@ class Iterate_Model(Base_Model):
             )
 
     def finalize(self):
+        """
+        Finalizes the model by defining costs and the objective function.
+
+        Notes:
+            - Artificial acceleration cost and thrust change cost deviate from the original paper by using the sum of squares instead of the 2-norm.
+            - This modification penalizes large spikes more effectively and improves solver performance.
+        """
         super().finalize()
 
         self.artificial_acceleration_cost = pmo.expression(

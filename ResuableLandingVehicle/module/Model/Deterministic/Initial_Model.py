@@ -1,3 +1,21 @@
+"""
+Initial_Model
+=============
+
+This class represents the initial model for a deterministic system. It extends the `Base_Model` class and incorporates specific initialization logic.
+
+Attributes:
+    params (Initial_Parameters): Initial parameters for the model.
+    nSteps (int): Number of steps in the simulation.
+    start (float): Start time of the simulation.
+    stop (float): Stop time of the simulation.
+    T_guess (Iterable[Array3], optional): A guess trajectory for the thrust, used as initial values.
+    steps (pmo.block_list): List of step models for the simulation.
+
+Methods:
+    __init__: Initializes the initial model with the given parameters and optional guess trajectory.
+"""
+
 from .Base_Model import Base_Model
 from ..Step_Model import Initial_Step_Model
 from ...System import System
@@ -11,6 +29,21 @@ from typing import Iterable
 
 
 class Initial_Model(Base_Model):
+    """
+    Initial_Model
+    ------------
+
+    Represents the initial model for a deterministic system.
+
+    Attributes:
+        params (Initial_Parameters): Initial parameters for the model.
+        nSteps (int): Number of steps in the simulation.
+        start (float): Start time of the simulation.
+        stop (float): Stop time of the simulation.
+        T_guess (Iterable[Array3], optional): A guess trajectory for the thrust, used as initial values.
+        steps (pmo.block_list): List of step models for the simulation.
+    """
+
     def __init__(
         self,
         params: Initial_Parameters,
@@ -19,6 +52,16 @@ class Initial_Model(Base_Model):
         stop: float,
         T_guess: Iterable[Array3] = None,
     ):
+        """
+        Initializes the initial model with the given parameters and optional guess trajectory.
+
+        Args:
+            params (Initial_Parameters): Initial parameters for the model.
+            nSteps (int): Number of steps in the simulation.
+            start (float): Start time of the simulation.
+            stop (float): Stop time of the simulation.
+            T_guess (Iterable[Array3], optional): A guess trajectory for the thrust, used as initial values.
+        """
         assert stop is not None, "Stop time must be provided for initial model"
         super().__init__(params, nSteps, start, stop)
 

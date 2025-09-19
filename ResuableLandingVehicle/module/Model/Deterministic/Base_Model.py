@@ -1,3 +1,22 @@
+"""
+Base_Model
+==========
+
+This class represents the base model for a deterministic system. It extends the `pmo.block` class from Pyomo and the `ABC` class for abstract base classes.
+
+Attributes:
+    params (SystemParameters): System parameters for the model.
+    nSteps (int): Number of steps in the simulation.
+    start (float): Start time of the simulation.
+    stop (float or None): Stop time of the simulation. If None, the time step (dt) is variable.
+    variable_dt (bool): Indicates whether the time step is variable.
+    dt (pmo.variable or float): Time step for the simulation.
+    initState (State): Initial state of the system.
+
+Methods:
+    __init__: Initializes the base model with the given parameters.
+"""
+
 from ...System import SystemParameters
 from ..State import State, IterationState
 
@@ -8,6 +27,22 @@ import numpy as np
 
 
 class Base_Model(pmo.block, ABC):
+    """
+    Base_Model
+    ----------
+
+    Represents the base model for a deterministic system.
+
+    Attributes:
+        params (SystemParameters): System parameters for the model.
+        nSteps (int): Number of steps in the simulation.
+        start (float): Start time of the simulation.
+        stop (float or None): Stop time of the simulation. If None, the time step (dt) is variable.
+        variable_dt (bool): Indicates whether the time step is variable.
+        dt (pmo.variable or float): Time step for the simulation.
+        initState (State): Initial state of the system.
+    """
+
     def __init__(
         self,
         params: SystemParameters,
@@ -15,6 +50,15 @@ class Base_Model(pmo.block, ABC):
         start: float,
         stop: Union[float, None],
     ):
+        """
+        Initializes the base model with the given parameters.
+
+        Args:
+            params (SystemParameters): System parameters for the model.
+            nSteps (int): Number of steps in the simulation.
+            start (float): Start time of the simulation.
+            stop (float or None): Stop time of the simulation. If None, the time step (dt) is variable.
+        """
         super().__init__()
         self.params = params
         self.start = start
@@ -40,9 +84,20 @@ class Base_Model(pmo.block, ABC):
         )
 
     def getIterationStates(self) -> Iterable[IterationState]:
+        """
+        Retrieves the iteration states for each step in the simulation.
+
+        Returns:
+            Iterable[IterationState]: A list of iteration states for each step.
+        """
         return [step.getIterationState() for step in self.steps]
 
     def Plot(self):
+        """
+        Generates and displays plots for the simulation results, including position, velocity, acceleration, mass, and thrust over time.
+
+        The method also visualizes the 3D trajectory of the system and the thrust vectors at specific time steps.
+        """
         # import matplotlib
 
         # matplotlib.use("TkAgg")

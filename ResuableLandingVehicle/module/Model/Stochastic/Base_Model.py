@@ -1,5 +1,13 @@
+"""
+Base_Model
+==========
+
+This module defines the `Base_Model` class, which serves as an abstract base class for stochastic models.
+It provides methods for iterating over nodes, setting probabilities, and plotting trajectories.
+"""
+
 from ...System import SystemParameters
-from ..State import State, IterationState
+from ..State import State  # Removed unused IterationState import
 from .Initial_Node import Initial_Node
 from .Iterate_Node import Iterate_Node
 from .StateTree import StateTree
@@ -13,6 +21,22 @@ Node = Union[Initial_Node, Iterate_Node]
 
 
 class Base_Model(pmo.block, ABC):
+    """
+    Base_Model
+    ----------
+
+    Abstract base class for stochastic models.
+
+    Attributes:
+        params (SystemParameters): System parameters for the model.
+        max_depth (int): Maximum depth of the stochastic tree.
+        start (float): Start time of the simulation.
+        dt (Union[float, pmo.variable]): Time step duration.
+        variable_dt (bool): Indicates whether the time step is variable.
+        stop (float): Stop time of the simulation.
+        initState (State): Initial state of the system.
+    """
+
     def __init__(
         self,
         params: SystemParameters,
@@ -20,6 +44,15 @@ class Base_Model(pmo.block, ABC):
         start: float,
         dt: Union[float, None],
     ):
+        """
+        Initializes the `Base_Model` with the given parameters.
+
+        Args:
+            params (SystemParameters): System parameters for the model.
+            max_depth (int): Maximum depth of the stochastic tree.
+            start (float): Start time of the simulation.
+            dt (Union[float, None]): Time step duration. If None, the time step is variable.
+        """
         super().__init__()
         self.params = params
         self.start = start
@@ -47,15 +80,42 @@ class Base_Model(pmo.block, ABC):
         # Child class must define root.
 
     def iter_nodes(self) -> Iterator[Node]:
+        """
+        Iterates over all nodes in the stochastic tree.
+
+        Yields:
+            Iterator[Node]: An iterator over all nodes.
+        """
         yield from self.root.iter_nodes()
 
     def iter_leaf_nodes(self) -> Iterator[Node]:
+        """
+        Iterates over all leaf nodes in the stochastic tree.
+
+        Yields:
+            Iterator[Node]: An iterator over all leaf nodes.
+        """
         yield from self.root.iter_leaf_nodes()
 
     def iter_nodes_at_depth(self, depth: int) -> Iterator[Node]:
+        """
+        Iterates over all nodes at a specific depth in the stochastic tree.
+
+        Args:
+            depth (int): Depth level to iterate over.
+
+        Yields:
+            Iterator[Node]: An iterator over nodes at the specified depth.
+        """
         yield from self.root.iter_nodes_at_depth(depth)
 
     def iter_unique_trajectories(self) -> Iterator[Iterable[Node]]:
+        """
+        Iterates over all unique trajectories in the stochastic tree.
+
+        Yields:
+            Iterator[Iterable[Node]]: An iterator over unique trajectories.
+        """
         # Use memoization to avoid recomputing shared ancestry
         memo = {}
 
@@ -77,15 +137,34 @@ class Base_Model(pmo.block, ABC):
             yield get_lineage(leaf)
 
     def setProbabilities(self):
+        """
+        Sets the probabilities for all nodes in the stochastic tree.
+        """
         self.root.setProbability()
 
     def finalize(self):
+        """
+        Finalizes the stochastic model by setting probabilities.
+        """
         self.setProbabilities()
 
     def getIterationStates(self) -> StateTree:
+        """
+        Retrieves the iteration states of the stochastic model.
+
+        Returns:
+            StateTree: A tree structure containing iteration states.
+        """
         return StateTree(self.root.getIterationStates())
 
     def Plot(self, axDict: dict = None, withLabels: bool = True):
+        """
+        Plots the trajectories of the stochastic model, including position, velocity, acceleration, mass, and thrust over time.
+
+        Args:
+            axDict (dict, optional): Dictionary of axes for plotting. Defaults to None.
+            withLabels (bool, optional): Whether to include labels in the plot. Defaults to True.
+        """
         # import matplotlib
 
         # matplotlib.use("TkAgg")

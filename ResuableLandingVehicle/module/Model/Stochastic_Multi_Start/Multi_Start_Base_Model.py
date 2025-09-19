@@ -1,3 +1,10 @@
+"""
+Multi_Start_Base_Model
+======================
+
+This module defines the `Multi_Start_Base_Model` class, which serves as an abstract base class for multi-start stochastic models.
+"""
+
 from ..Stochastic import Iterate_Model, Initial_Model
 from typing import List, Union
 
@@ -7,11 +14,30 @@ from abc import ABC, abstractmethod
 
 
 class Multi_Start_Base_Model(pmo.block, ABC):
+    """
+    Multi_Start_Base_Model
+    -----------------------
+
+    Abstract base class for multi-start stochastic models.
+
+    Attributes:
+        subModels (pmo.block_list): List of sub-models (either `Iterate_Model` or `Initial_Model`).
+        objective (pmo.objective): Objective function for the multi-start model.
+        non_anticipative_thrust (pmo.constraint_dict): Constraints ensuring non-anticipative thrust.
+    """
+
     def __init__(
         self,
         subModels: List[Union[Iterate_Model, Initial_Model]],
         num_non_anticipative_periods: int,
     ):
+        """
+        Initializes the `Multi_Start_Base_Model` with the given sub-models and non-anticipative periods.
+
+        Args:
+            subModels (List[Union[Iterate_Model, Initial_Model]]): List of sub-models.
+            num_non_anticipative_periods (int): Number of non-anticipative periods.
+        """
         super().__init__()
 
         self.subModels = pmo.block_list(self.handle_input_models(subModels))
@@ -49,13 +75,35 @@ class Multi_Start_Base_Model(pmo.block, ABC):
     def handle_input_models(
         self, subModels: List[Union[Iterate_Model, Initial_Model]]
     ) -> List[Union[Iterate_Model, Initial_Model]]:
+        """
+        Abstract method to handle input models.
+
+        Args:
+            subModels (List[Union[Iterate_Model, Initial_Model]]): List of sub-models.
+
+        Returns:
+            List[Union[Iterate_Model, Initial_Model]]: Processed list of sub-models.
+        """
         pass
 
     @abstractmethod
     def handle_uniform_dt(self):
+        """
+        Abstract method to ensure uniform time steps across models.
+        """
         pass
 
     def Plot(self, axDict: dict = None, saveFileName: str = None):
+        """
+        Plots the results of the multi-start model.
+
+        Args:
+            axDict (dict, optional): Dictionary of axes for plotting. Defaults to None.
+            saveFileName (str, optional): File name to save the animation. Defaults to None.
+
+        Returns:
+            dict: Dictionary of axes used for plotting.
+        """
         if axDict is None:
             import matplotlib.pyplot as plt
 

@@ -1,3 +1,10 @@
+"""
+Initial_Model
+=============
+
+This module defines the `Initial_Model` class, which extends the `Base_Model` to provide specific implementations for the initial stochastic model.
+"""
+
 from .Initial_Node import Initial_Node
 from .Base_Model import Base_Model
 from ...System import SystemParameters
@@ -7,6 +14,20 @@ import pyomo.kernel as pmo
 
 
 class Initial_Model(Base_Model):
+    """
+    Initial_Model
+    -------------
+
+    Extends the `Base_Model` to provide specific implementations for the initial stochastic model.
+
+    Attributes:
+        params (SystemParameters): System parameters for the model.
+        max_depth (int): Maximum depth of the stochastic tree.
+        start (float): Start time of the simulation.
+        dt (Union[float, pmo.variable]): Time step duration.
+        root (Initial_Node): Root node of the stochastic tree.
+    """
+
     def __init__(
         self,
         params: SystemParameters,
@@ -14,6 +35,15 @@ class Initial_Model(Base_Model):
         start: float,
         dt: Union[float, None],
     ):
+        """
+        Initializes the `Initial_Model` with the given parameters.
+
+        Args:
+            params (SystemParameters): System parameters for the model.
+            max_depth (int): Maximum depth of the stochastic tree.
+            start (float): Start time of the simulation.
+            dt (Union[float, None]): Time step duration. If None, the time step is variable.
+        """
         super().__init__(
             params,
             max_depth,
@@ -32,6 +62,12 @@ class Initial_Model(Base_Model):
         )
 
     def finalize(self):
+        """
+        Finalizes the stochastic model by setting probabilities and defining the objective function.
+
+        Notes:
+            - The artificial acceleration cost departs from the original paper by using the sum of squares instead of the 2-norm. This penalizes large spikes and allows the solver to handle the model more efficiently.
+        """
         super().finalize()
 
         self.artificial_acceleration_cost = pmo.expression(
@@ -69,6 +105,17 @@ class Initial_Model(Base_Model):
         stage2Length: int,
         numStage2Scenarios: int,
     ):
+        """
+        Propagates the stochastic tree in two stages.
+
+        Args:
+            stage1Length (int): Length of the first stage.
+            stage2Length (int): Length of the second stage.
+            numStage2Scenarios (int): Number of scenarios in the second stage.
+
+        Notes:
+            - Different weather patterns are assigned to each scenario in the second stage.
+        """
         assert stage1Length > 0, "Stage 1 length must be greater than 0"
         assert stage2Length > 0, "Stage 2 length must be greater than 0"
         assert (
@@ -95,6 +142,12 @@ class Initial_Model(Base_Model):
         self,
         totalDepth: int,
     ):
+        """
+        Propagates the stochastic tree linearly to the specified depth.
+
+        Args:
+            totalDepth (int): Total depth of the stochastic tree.
+        """
         assert totalDepth > 0, "Total depth must be greater than 0"
 
         self.root.max_depth = totalDepth
