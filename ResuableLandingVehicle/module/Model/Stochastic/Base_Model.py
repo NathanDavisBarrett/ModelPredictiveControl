@@ -26,7 +26,8 @@ class Base_Model(pmo.block, ABC):
         self.max_depth = max_depth
 
         if dt is None:
-            self.dt = pmo.variable(domain=pmo.NonNegativeReals, value=1.0)
+            dt_est = params.dt_est if hasattr(params, "dt_est") else 1.0
+            self.dt = pmo.variable(domain=pmo.NonNegativeReals, value=dt_est)
             self.variable_dt = True
         else:
             self.dt = dt
@@ -90,7 +91,7 @@ class Base_Model(pmo.block, ABC):
         dt = pmo.value(self.dt)
         times = [self.start + i * dt for i in range(self.max_depth)]
 
-        fig = plt.figure(figsize=(12, 16))
+        fig = plt.figure(figsize=(16, 8))
         gs = fig.add_gridspec(3, 2)
         posAx = fig.add_subplot(gs[0, 0])
         velAx = fig.add_subplot(gs[0, 1])

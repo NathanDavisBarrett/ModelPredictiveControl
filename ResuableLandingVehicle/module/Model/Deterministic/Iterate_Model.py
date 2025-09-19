@@ -20,6 +20,7 @@ class Iterate_Model(Base_Model):
             prevState = self.initState if i == 0 else self.steps[i - 1].getState()
 
             step = Iterate_Step_Model(
+                t_est=i * self.params.dt_est,
                 params=params,
                 dt=self.dt,
                 prevTimeState=prevState,

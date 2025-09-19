@@ -15,12 +15,14 @@ class Iterate_Parameters(Initial_Parameters):
     previous_iterate_states: Iterable[
         IterationState
     ]  # List of previous iteration states for each time step
+    dt_est: float  # Estimated time step for initial guess
 
     @classmethod
     def from_initial_params(
-        cls, initParams, initStates, w_eta_dt=None, w_eta_thrust=None
+        cls, initParams, initStates, dt_est, w_eta_dt=None, w_eta_thrust=None
     ):
         kwargs = {k: v for k, v in initParams.__dict__.items()}
+        kwargs["dt_est"] = dt_est
         if w_eta_dt is not None:
             kwargs["w_eta_dt"] = w_eta_dt
         if w_eta_thrust is not None:

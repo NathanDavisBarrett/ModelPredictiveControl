@@ -52,6 +52,7 @@ class Initial_Model(Base_Model):
                 initializationState = None
 
             step = Initial_Step_Model(
+                t_est=i * self.dt,
                 params=params,
                 dt=self.dt,
                 reference_mass=reference_mass,

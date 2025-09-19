@@ -7,6 +7,7 @@ from ..State import State, InitializationState
 class Initial_Step_Model(Base_Step_Model):
     def __init__(
         self,
+        t_est: float,  # Estimated time (used for determining wind speed)
         params: SystemParameters,
         dt: float,  # Float must be fixed for the initial guess
         reference_mass: float = None,
@@ -17,6 +18,7 @@ class Initial_Step_Model(Base_Step_Model):
     ):
 
         super().__init__(
+            t_est=t_est,
             params=params,
             dt=dt,
             prevState=prevState,
@@ -39,7 +41,8 @@ class Initial_Step_Model(Base_Step_Model):
         return self.base_velocity_evolution_function(dt, accel_i, prev_accel_i)
 
     def ComputeDragForce(self) -> Array3:
-        return self.params.ComputeDragForce(self.velocity, v_mag=self.reference_speed)
+        v_eff = self.math.vector_add(self.velocity, self.wind_velocity)
+        return self.params.ComputeDragForce(v_eff, v_mag=self.reference_speed)
 
     def NewtonsSecondLaw(self, i):
         # Mg * (km/s^2 + km/s^2) = kN + kN + (km/s^2 * Mg)

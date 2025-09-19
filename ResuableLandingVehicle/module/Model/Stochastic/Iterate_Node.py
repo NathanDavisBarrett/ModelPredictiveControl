@@ -10,8 +10,9 @@ from typing import Iterator
 class Iterate_Node(Iterate_Step_Model):
     def __init__(
         self,
+        t_est: float,  # Estimated time at this node
         params: Iterate_Parameters,
-        dt: float,  # Float must be fixed for the initial guess
+        dt: pmo.variable,
         depth: int,
         max_depth: int,
         prevIterationState: IterationState,
@@ -22,6 +23,7 @@ class Iterate_Node(Iterate_Step_Model):
         isFinal = depth == max_depth - 1
 
         super().__init__(
+            t_est=t_est,
             params=params,
             dt=dt,
             prevTimeState=prevTimeState,

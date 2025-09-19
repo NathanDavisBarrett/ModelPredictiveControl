@@ -2,7 +2,8 @@ from .Base_Model import Base_Model
 from .Iterate_Node import Iterate_Node
 from .StateTree import State_Node
 from ..State import IterationState
-from ..Parameters import Iterate_Parameters
+from ..Parameters import Iterate_Parameters, Initial_Parameters
+from ..Step_Model import Base_Step_Model
 
 from typing import Iterable
 import pyomo.kernel as pmo
@@ -13,13 +14,7 @@ class Iterate_Model(Base_Model):
         self,
         previousIterationModel: Base_Model,
     ):
-        if not isinstance(previousIterationModel.params, Iterate_Parameters):
-            params = Iterate_Parameters.from_initial_params(
-                previousIterationModel.params,
-                previousIterationModel.getIterationStates(),
-            )
-        else:
-            params = previousIterationModel.params
+        params = self.get_params_from_model(previousIterationModel)
         super().__init__(
             params,
             max_depth=previousIterationModel.max_depth,
@@ -29,8 +24,11 @@ class Iterate_Model(Base_Model):
 
         self.previousIterationStates = previousIterationModel.getIterationStates()
 
+        rootParams = self.get_params_from_model(previousIterationModel.root)
+
         self.root = Iterate_Node(
-            params=self.params,
+            t_est=self.start,
+            params=rootParams,
             dt=self.dt,
             depth=0,
             max_depth=self.max_depth,
@@ -39,17 +37,41 @@ class Iterate_Model(Base_Model):
         )
 
         self.propagate_initialization(
-            node=self.root, childStateNodes=self.previousIterationStates.root.children
+            node=self.root,
+            childStateNodes=self.previousIterationStates.root.children,
+            prevIterationNode=previousIterationModel.root,
         )
 
         self.finalize()
 
+    @staticmethod
+    def get_params_from_model(model: Base_Model) -> Iterate_Parameters:
+        if isinstance(model.params, Initial_Parameters):
+            return Iterate_Parameters.from_initial_params(
+                model.params,
+                model.getIterationStates(),
+                dt_est=pmo.value(model.dt),
+            )
+        elif isinstance(model.params, Iterate_Parameters):
+            params = model.params
+            params.dt_est = pmo.value(model.dt)
+            return params
+        else:
+            raise ValueError(f"Unknown parameters type: {type(model.params)}")
+
     def propagate_initialization(
-        self, node: Iterate_Node, childStateNodes: Iterable[State_Node]
+        self,
+        node: Iterate_Node,
+        childStateNodes: Iterable[State_Node],
+        prevIterationNode: Base_Step_Model,
     ):
         for i in range(len(childStateNodes)):
+            prevIterationNode_i = prevIterationNode.child_nodes[i]
+            prevIterParams = self.get_params_from_model(prevIterationNode_i)
+
             node_i = Iterate_Node(
-                params=node.params,
+                t_est=node.t_est + pmo.value(self.dt),
+                params=prevIterParams,
                 dt=self.dt,
                 depth=node.depth + 1,
                 max_depth=self.max_depth,
@@ -57,7 +79,9 @@ class Iterate_Model(Base_Model):
                 prevTimeState=node.getState(),
             )
             node.child_nodes.append(node_i)
-            self.propagate_initialization(node_i, childStateNodes[i].children)
+            self.propagate_initialization(
+                node_i, childStateNodes[i].children, prevIterationNode_i
+            )
 
     def finalize(self):
         super().finalize()

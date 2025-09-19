@@ -13,8 +13,8 @@ def test_n_iterable_run(n_iter=10, headless=True):
     params = Initial_Parameters()
     init_model = Initial_Model(params, max_depth=N_STEPS, start=0, dt=0.5)
 
-    stage1Len = int(np.floor(N_STEPS / 4))
-    init_model.propagate_two_stage(stage1Len, N_STEPS - stage1Len, 2)
+    stage1Len = int(np.floor(N_STEPS / 3))
+    init_model.propagate_two_stage(stage1Len, N_STEPS - stage1Len, 10)
 
     solver = WrappedSolver(
         pmo.SolverFactory("gurobi"), interactiveInfeasibilityReport=headless
@@ -23,6 +23,21 @@ def test_n_iterable_run(n_iter=10, headless=True):
     assert results.solver.termination_condition == pmo.TerminationCondition.optimal
 
     model_i = init_model
+
+    # import matplotlib
+    # import matplotlib.pyplot as plt
+
+    # matplotlib.use("TkAgg")
+    # fig, axes = plt.subplots(1, 3)
+
+    # for node in model_i.iter_leaf_nodes():
+    #     print(node.wind_velocity)
+    #     print(node.params.wind_function.random_state)
+    #     node.params.wind_function.Plot(axes)
+    # plt.show()
+
+    # STOP
+
     artificial_acc = None
     for i in range(n_iter):
         model_i = Iterate_Model(previousIterationModel=model_i)

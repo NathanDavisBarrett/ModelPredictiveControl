@@ -29,4 +29,4 @@ def test_Initial_Feasible(headless=True):
         matplotlib.use("TkAgg")
         model.Plot()
 
-    return params, model.getIterationStates()
+    return params, model.getIterationStates(), pmo.value(model.dt)

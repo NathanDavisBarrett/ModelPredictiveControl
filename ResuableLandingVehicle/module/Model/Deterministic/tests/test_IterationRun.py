@@ -19,7 +19,7 @@ def test_n_iterable_run(n_iter=10, headless=True):
     artificial_acc = None
     for i in range(n_iter):
         params_i = Iterate_Parameters.from_initial_params(
-            params, model_i.getIterationStates()
+            params, model_i.getIterationStates(), dt_est=pmo.value(model_i.dt)
         )
         model_i = Iterate_Model(params_i, nSteps=N_STEPS, start=0)
 

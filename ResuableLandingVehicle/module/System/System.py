@@ -26,11 +26,18 @@ class System:
         self.m = self.params.m0
         self.T = self.params.T0.copy()
         self.T_Mag = self.math.norm(self.T)
+        self.t = 0.0
 
     def step(self, T: Array3, dt: float):
+        self.t += dt  # s
+
         T_Mag = self.math.norm(T)  # kN
 
-        D = self.params.ComputeDragForce(self.v, v_mag=self.reference_speed)  # kN
+        wind_speed = self.params.wind_function(self.t)[0]  # km/s
+
+        v_eff = self.v + wind_speed  # km/s
+
+        D = self.params.ComputeDragForce(v_eff, v_mag=self.reference_speed)  # kN
 
         m = self.m if self.reference_mass is None else self.reference_mass  # Mg
 

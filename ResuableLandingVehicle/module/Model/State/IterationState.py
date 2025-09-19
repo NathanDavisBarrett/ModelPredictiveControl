@@ -12,6 +12,7 @@ class IterationState(InitializationState):
         prev_gamma: float,
         velocity: Array3,
         prev_velocity: Array3,
+        wind_velocity: Array3,
         thrust: Array3,
         prev_thrust: Array3,
         acceleration: Array3,
@@ -34,7 +35,8 @@ class IterationState(InitializationState):
         self.prev_velocity = prev_velocity
         self.prev_thrust = prev_thrust
         self.prev_acceleration = prev_acceleration
+        self.wind_velocity = wind_velocity
 
-        @property
-        def gamma(self) -> float:
-            return self._gamma
+    @property
+    def gamma(self) -> float:
+        return self._gamma

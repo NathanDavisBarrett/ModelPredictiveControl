@@ -11,6 +11,7 @@ from typing import Union
 class Iterate_Step_Model(Base_Step_Model):
     def __init__(
         self,
+        t_est: float,  # Estimated time (used for determining wind speed)
         params: SystemParameters,
         dt: Union[float, pmo.variable],
         prevTimeState: State,
@@ -19,6 +20,7 @@ class Iterate_Step_Model(Base_Step_Model):
     ):
 
         super().__init__(
+            t_est=t_est,
             params=params,
             dt=dt,
             prevState=prevTimeState,
@@ -159,8 +161,13 @@ class Iterate_Step_Model(Base_Step_Model):
         return previousValue + self.math.dot(derivative, change)
 
     def ComputeDragForce(self) -> Array3:
-        prevItMag = np.linalg.norm(self.prevIterationState.velocity)
-        return self.params.ComputeDragForce(self.velocity, prevItMag)  # kN
+        prev_drag_velocity = self.math.vector_add(
+            self.prevIterationState.prev_velocity, self.prevIterationState.wind_velocity
+        )
+        prevItMag = np.linalg.norm(prev_drag_velocity)
+        drag_velocity = self.math.vector_add(self.velocity, self.wind_velocity)
+        self
+        return self.params.ComputeDragForce(drag_velocity, prevItMag)  # kN
 
     def NewtonsSecondLaw(self, i):
         prevItMass = self.prevIterationState.mass

@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Dict, Any
 import numpy as np
 import pyomo.kernel as pmo
+from functools import cached_property
 
 from PyomoTools.kernel.Formulations import Conic
 
@@ -17,6 +18,7 @@ class Base_Step_Model(pmo.block, ABC):
 
     def __init__(
         self,
+        t_est: float,  # Estimated time (used for determining wind speed)
         params: SystemParameters,
         dt: Union[float, pmo.variable],
         prevState: State = None,
@@ -26,6 +28,7 @@ class Base_Step_Model(pmo.block, ABC):
     ):
         super().__init__()
 
+        self.t_est = t_est
         self.params = params
         for key, value in otherParams.items():
             setattr(self, key, value)
@@ -162,6 +165,10 @@ class Base_Step_Model(pmo.block, ABC):
     def ComputeDragForce(self) -> Array3:
         raise NotImplementedError("Subclasses must implement ComputeDragForce method")
 
+    @cached_property
+    def wind_velocity(self) -> Array3:
+        return self.params.wind_function(self.t_est)[0]
+
     @abstractmethod
     def NewtonsSecondLaw(self, i):
         raise NotImplementedError("Subclasses must implement NewtonsSecondLaw method")
@@ -288,6 +295,7 @@ class Base_Step_Model(pmo.block, ABC):
             prev_gamma=pmo.value(self.prevState.gamma),
             velocity=[pmo.value(v) for v in self.velocity],
             prev_velocity=[pmo.value(v) for v in self.prevState.velocity],
+            wind_velocity=self.wind_velocity,
             thrust=[pmo.value(t) for t in self.thrust],
             prev_thrust=[pmo.value(t) for t in self.prevState.thrust],
             acceleration=[pmo.value(a) for a in self.acceleration],

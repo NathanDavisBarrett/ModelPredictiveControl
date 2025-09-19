@@ -3,12 +3,13 @@ from .testing_Parameters import N_STEPS
 from ..Iterate_Model import Iterate_Parameters, Iterate_Model
 
 import pyomo.environ as pmo
+from warnings import warn
 
 
 def test_Iterate_Construction():
-    initParams, initStates = test_Initial_Feasible(headless=False)
+    initParams, initStates, dt = test_Initial_Feasible(headless=False)
 
-    params = Iterate_Parameters.from_initial_params(initParams, initStates)
+    params = Iterate_Parameters.from_initial_params(initParams, initStates, dt)
 
     model = Iterate_Model(params, nSteps=N_STEPS, start=0)
     assert model is not None
@@ -24,11 +25,13 @@ def test_Iterate_Feasible(headless=True):
     # STOP
 
     solver = pmo.SolverFactory("gurobi")
-    solver.solve(
+    result = solver.solve(
         model,
         tee=headless,
     )
     assert pmo.value(model.artificial_acceleration_norm) < 1.0
+    if result.solver.termination_condition != pmo.TerminationCondition.optimal:
+        warn(f"Solver did not find optimal solution: {result}")
 
     if headless:
         import matplotlib

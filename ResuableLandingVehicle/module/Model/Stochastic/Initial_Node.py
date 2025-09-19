@@ -10,6 +10,7 @@ from typing import Iterator
 class Initial_Node(Initial_Step_Model):
     def __init__(
         self,
+        t: float,
         params: SystemParameters,
         dt: float,  # Float must be fixed for the initial guess
         depth: int,
@@ -30,6 +31,7 @@ class Initial_Node(Initial_Step_Model):
         isFinal = depth == max_depth - 1
 
         super().__init__(
+            t_est=t,
             params=params,
             dt=dt,
             reference_mass=reference_mass,
@@ -39,6 +41,7 @@ class Initial_Node(Initial_Step_Model):
             initializationState=initializationState,
         )
 
+        self.t = t
         self.depth = depth
         self.max_depth = max_depth
 
@@ -67,6 +70,7 @@ class Initial_Node(Initial_Step_Model):
             raise ValueError("Cannot add child to node at max depth")
 
         child = Initial_Node(
+            t=self.t + self.dt,
             params=params if params is not None else self.params,
             dt=self.dt,  # Float must be fixed for the initial guess
             depth=self.depth + 1,

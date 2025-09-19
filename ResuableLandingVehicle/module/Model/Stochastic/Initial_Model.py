@@ -22,6 +22,7 @@ class Initial_Model(Base_Model):
         )
 
         self.root = Initial_Node(
+            t=self.start,
             params=params,
             dt=self.dt,
             depth=0,
@@ -78,8 +79,11 @@ class Initial_Model(Base_Model):
             node_i = node_i.add_child()
         for _ in range(numStage2Scenarios):
             node_j = node_i
-            for _ in range(stage2Length):
+            for j in range(stage2Length):
                 node_j = node_j.add_child()
+                # When breaking off into scenarios, assign different weather patterns to each one.
+                if j == 0:
+                    node_j.params = node_j.params.spawn(pmo.value(node_j.t_est))
 
         self.finalize()
 

@@ -2,12 +2,21 @@ import numpy as np
 from dataclasses import dataclass
 from ..Util.Math import Math, Array3, Number
 from ..Util.PyomoMath import PyomoMath
+from ..Util.WindGenerator import Wind_Function
 
 from functools import cached_property
+from copy import deepcopy
+
+from random import Random
+
+contained_random_number_generator = Random()
 
 
 @dataclass
 class SystemParameters:
+    end_time: float = 200.0  # The maximum-possible Final time (s)
+    start_time: float = 0.0  # Initial time (s)
+
     x0: Array3 = np.array([0.15, 0.25, 2.0])  # Initial position (km)
     v0: Array3 = np.array([-0.00, 0, -0.1])  # Initial velocity (km/s)
     m0: float = 15  # Mg
@@ -46,6 +55,8 @@ class SystemParameters:
 
     e_u = np.array([0, 0, 1])  # The upward-facing unit vector
 
+    wind_function: Wind_Function = None
+
     math: Math = PyomoMath  # Math library to use
 
     def __post_init__(self):
@@ -58,22 +69,30 @@ class SystemParameters:
             self.dTdt_max > 0 > self.dTdt_min
         ), f"Invalid thrust rate limits: dTdt_min = {self.dTdt_min}, dTdt_max = {self.dTdt_max}"
 
+        if self.wind_function is None:
+            wind_mag_mi_hr = 50  # miles per hour
+            wind_mag_km_sec = wind_mag_mi_hr / 2236.9362921  # km/s
+
+            bias = np.random.uniform(0, wind_mag_km_sec)
+            fluctuation = bias / 2 + wind_mag_km_sec / 3
+
+            self.wind_function = Wind_Function(
+                magnitude=fluctuation,
+                bias=bias,
+                start_time=self.start_time,
+                end_time=self.end_time,
+            )
+
     def ComputeDragForce(self, v: Array3, v_mag: Number = None) -> Array3:
         if v_mag is None:
             v_mag = self.math.norm(v)
+
         # D (N) = -0.5 * rho * Cd * Sd * (v_mag_m_s) * v_m_s
         # D (kN) = D(N) / 1000
         # D (kN) = -0.5 * rho * Cd * Sd * (v_mag_km_s * 1000) * (v_km_s * 1000) / 1000
         # D (kN) = -0.5 * rho * Cd * Sd * v_mag_km_s * v_km_s * 1000
         factor = -0.5 * self.rho * self.Cd * self.Sd * v_mag * 1000
         return [(factor * vi) for vi in v]  # Drag force vector (kN)
-
-    def ComputeDragForceSq(self, v_mag_sq: Number, v_sq: Array3) -> Array3:
-        factor = (
-            0.5 * self.rho * self.Cd * self.Sd
-        ) ** 2 * v_mag_sq  # (kg / m3 * _ * m2 * km/s)^2 = 1000^2(kg / m3 * _ * m2 * m/s)^2 = 1000^2(kg / s)^2 * (N/(kg * m/s2))^2 = (1000N/(m/s))^2 = (kN/(m/s))^2
-
-        return [(factor * vi) for vi in v_sq]  # Drag force vector (kN^2)
 
     def ComputeMassDepletion(self, T_Mag: Number) -> Number:
         # (Mg/s)/kN * kN - Mg/s = Mg/s
@@ -103,3 +122,27 @@ class SystemParameters:
     @cached_property
     def final_speed(self) -> float:
         return self.math.norm(self.vf)  # km/s
+
+    def spawn(self, spawn_time: float) -> "SystemParameters":
+        new_params = deepcopy(self)
+
+        # Spawn the wind function at the new time
+        new_params.wind_function = self.wind_function.spawn(copy_end=spawn_time)
+
+        # Add noise to the specific impulse, air pressure and air density
+        variation = 0.1  # 10% variation
+        new_params.I_sp *= 1 + contained_random_number_generator.uniform(
+            -variation, variation
+        )
+        new_params.P *= 1 + contained_random_number_generator.uniform(
+            -variation, variation
+        )
+        new_params.rho *= 1 + contained_random_number_generator.uniform(
+            -variation, variation
+        )
+
+        for prop in ["g_mag", "alpha", "mdot_bp", "initial_speed", "final_speed"]:
+            if prop in new_params.__dict__:
+                del new_params.__dict__[prop]
+
+        return new_params

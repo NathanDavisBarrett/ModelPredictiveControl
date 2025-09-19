@@ -21,8 +21,9 @@ class Base_Model(pmo.block, ABC):
         self.nSteps = nSteps
 
         if stop is None:
+            dt_est = params.dt_est if hasattr(params, "dt_est") else 1.0
             self.variable_dt = True
-            self.dt = pmo.variable(domain=pmo.NonNegativeReals, value=1.0)
+            self.dt = pmo.variable(domain=pmo.NonNegativeReals, value=dt_est)
             self.stop = self.start + self.nSteps * self.dt
         else:
             self.variable_dt = False
