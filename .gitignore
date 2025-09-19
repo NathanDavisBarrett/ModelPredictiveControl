@@ -5,3 +5,4 @@
 __pycache__/
 *.gif
 *.npy
+!MultiStart_Iteration.gif
